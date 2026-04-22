@@ -106,6 +106,10 @@ svg {
   display: none;
 }
 
+.mobile-floating-sync {
+  display: none;
+}
+
 .icon-rail {
   display: flex;
   flex-direction: column;
@@ -2422,7 +2426,36 @@ svg {
   }
 
   .mobile-sync-shortcut {
+    display: none;
+  }
+
+  .mobile-floating-sync {
+    position: fixed;
+    right: 14px;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    z-index: 28;
     display: inline-grid;
+    grid-auto-flow: column;
+    gap: 6px;
+    align-items: center;
+    min-height: 42px;
+    padding: 0 14px;
+    border: 1px solid rgba(47, 111, 237, 0.24);
+    border-radius: 999px;
+    background: #2f6fed;
+    box-shadow: 0 10px 24px rgba(47, 111, 237, 0.28);
+    color: #fff;
+    font-size: 14px;
+  }
+
+  .mobile-floating-sync.active {
+    background: #1f5bd3;
+  }
+
+  .mobile-floating-sync svg {
+    width: 17px;
+    height: 17px;
+    stroke-width: 2.2;
   }
 
   .mobile-tabbar button {
@@ -2483,7 +2516,7 @@ svg {
     font-size: 20px;
   }
 
-  .wide-mode .header-actions {
+  .wide-mode .header-actions > :not(.more-anchor) {
     display: none;
   }
 

@@ -1183,6 +1183,15 @@ export default function App() {
         )}
       </aside>
 
+      <button
+        className={activePanel === "sync" ? "mobile-floating-sync active" : "mobile-floating-sync"}
+        type="button"
+        onClick={openSyncPanel}
+      >
+        <Icon name="sync" />
+        <span>同步</span>
+      </button>
+
       <nav className="mobile-tabbar" aria-label="移动端导航">
         <button className={activePanel === "tasks" ? "active" : ""} type="button" onClick={() => selectView("inbox")}>
           <Icon name="check" />
