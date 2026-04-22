@@ -41,7 +41,7 @@ VITE_SUPABASE_ANON_KEY=你的 Publishable/Anon key
 Supabase 控制台还需要确认：
 
 - Authentication > Providers > Email 已启用。
-- Email 登录使用 6 位验证码。如果邮件模板里看不到验证码，请在 Supabase 的 Email Templates 里加入 `{{ .Token }}`。
+- Email 登录使用 6 位验证码。如果邮件仍然是登录链接，需要到 Authentication > Email Templates > Magic Link，把邮件正文改成包含 `{{ .Token }}`，例如 `验证码：{{ .Token }}`。
 - Authentication > URL Configuration > Redirect URLs 加入本地地址，例如 `http://localhost:5173`。
 - 部署后把 Vercel 的正式 HTTPS 地址也加入 Redirect URLs。
 

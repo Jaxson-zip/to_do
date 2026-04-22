@@ -588,10 +588,10 @@ export default function App() {
       await signInWithEmail(cleanEmail);
       setOtpSentTo(cleanEmail);
       setOtpCode("");
-      setAuthMessage("验证码已发送，请在这里输入邮件里的 6 位数字。");
+      setAuthMessage("验证码已发送，请在这里输入邮件里的 6 位数字。邮件仍是链接时，需要先改 Supabase 邮件模板。");
     } catch (error) {
       setAuthMessage("");
-      setSyncError(error instanceof Error ? error.message : "登录失败");
+      setSyncError(errorMessage(error, "登录失败"));
     }
   }
 
@@ -610,7 +610,7 @@ export default function App() {
       setOtpCode("");
     } catch (error) {
       setAuthMessage("");
-      setSyncError(error instanceof Error ? error.message : "验证码错误或已过期");
+      setSyncError(errorMessage(error, "验证码错误或已过期"));
     }
   }
 
@@ -627,7 +627,7 @@ export default function App() {
       setAuthMessage("新的验证码已发送。");
     } catch (error) {
       setAuthMessage("");
-      setSyncError(error instanceof Error ? error.message : "重发验证码失败");
+      setSyncError(errorMessage(error, "重发验证码失败"));
     }
   }
 
@@ -650,7 +650,7 @@ export default function App() {
       const stats = await fetchCloudStats(currentSession.user);
       setCloudStats(stats);
     } catch (error) {
-      setSyncError(error instanceof Error ? error.message : "读取云端统计失败");
+      setSyncError(errorMessage(error, "读取云端统计失败"));
     } finally {
       setCloudStatsLoading(false);
     }
@@ -681,7 +681,7 @@ export default function App() {
       setCloudStats({ items: merged.items.length, lists: merged.lists.length, fetchedAt: syncedAt });
       saveLastSync(syncedAt);
     } catch (error) {
-      setSyncError(error instanceof Error ? error.message : "同步失败");
+      setSyncError(errorMessage(error, "同步失败"));
     } finally {
       syncingRef.current = false;
       setSyncing(false);
@@ -2799,6 +2799,22 @@ function getSyncStatus(
   if (pendingSync) return { text: "本地改动等待自动同步", tone: "pending" };
   if (lastSyncedAt) return { text: `已同步：${formatDateTime(lastSyncedAt)}`, tone: "online" };
   return { text: "已登录，正在准备第一次同步", tone: "pending" };
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object") {
+    const value = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const parts = [value.message, value.details, value.hint]
+      .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+      .map((part) => part.trim());
+    if (parts.length > 0) {
+      const code = typeof value.code === "string" ? ` [${value.code}]` : "";
+      return `${parts.join(" ")}${code}`;
+    }
+  }
+  if (typeof error === "string" && error.trim()) return error.trim();
+  return fallback;
 }
 
 function syncSignature(items: MemoItem[], lists: MemoList[]): string {
