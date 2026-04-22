@@ -102,6 +102,10 @@ svg {
   display: none;
 }
 
+.mobile-sync-shortcut {
+  display: none;
+}
+
 .icon-rail {
   display: flex;
   flex-direction: column;
@@ -492,6 +496,15 @@ svg {
 .mini-auth button:disabled {
   color: #aaa;
   background: #f8f8f8;
+}
+
+.refresh-app-link {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--blue);
+  font-size: 12px;
 }
 
 .signed-row {
@@ -2406,6 +2419,10 @@ svg {
     border-top: 1px solid var(--line);
     background: rgba(250, 250, 250, 0.96);
     backdrop-filter: blur(18px);
+  }
+
+  .mobile-sync-shortcut {
+    display: inline-grid;
   }
 
   .mobile-tabbar button {

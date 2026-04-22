@@ -476,6 +476,18 @@ export default function App() {
     setSelectedId(null);
   }
 
+  async function refreshApp() {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+    window.location.reload();
+  }
+
   function setFocusDuration(minutes: number) {
     const nextMinutes = clampTimerMinutes(minutes);
     setFocusMinutes(nextMinutes);
@@ -864,6 +876,7 @@ export default function App() {
           submitSignup={submitPasswordSignup}
           runSync={runSync}
           refreshCloudStats={refreshCloudStats}
+          refreshApp={refreshApp}
         />
       </aside>
 
@@ -891,6 +904,14 @@ export default function App() {
           </div>
           <div className="header-actions">
             <span>{panelItemCount}</span>
+            <button
+              className={activePanel === "sync" ? "header-action mobile-sync-shortcut active" : "header-action mobile-sync-shortcut"}
+              type="button"
+              onClick={openSyncPanel}
+            >
+              <Icon name="sync" />
+              <span>同步</span>
+            </button>
             {showTaskSort && (
               <button
                 className={sortMode !== "smart" ? "header-action active" : "header-action"}
@@ -1155,6 +1176,7 @@ export default function App() {
             submitSignup={submitPasswordSignup}
             runSync={runSync}
             refreshCloudStats={refreshCloudStats}
+            refreshApp={refreshApp}
             notificationPermission={notificationPermission}
             requestReminderPermission={requestReminderPermission}
           />
@@ -1283,6 +1305,7 @@ function SyncBox({
   submitSignup,
   runSync,
   refreshCloudStats,
+  refreshApp,
 }: {
   session: Session | null;
   email: string;
@@ -1301,6 +1324,7 @@ function SyncBox({
   submitSignup: (event: FormEvent<HTMLFormElement> | MouseEvent<HTMLButtonElement>) => void;
   runSync: () => Promise<void>;
   refreshCloudStats: () => Promise<void>;
+  refreshApp: () => Promise<void>;
 }) {
   const status = getSyncStatus(session, syncing, pendingSync, syncError, lastSyncedAt);
 
@@ -1380,12 +1404,20 @@ function SyncBox({
           <button type="button" onClick={() => void refreshCloudStats()} disabled={cloudStatsLoading}>
             {cloudStatsLoading ? "读取中" : "刷新云端统计"}
           </button>
+          <button type="button" onClick={() => void refreshApp()}>
+            更新应用
+          </button>
           {cloudStats?.fetchedAt && <p>统计读取于 {formatDateTime(cloudStats.fetchedAt)}</p>}
         </div>
       )}
 
       {authMessage && <p>{authMessage}</p>}
       {syncError && <p className="error-text">{syncError}</p>}
+      {!session && (
+        <button className="refresh-app-link" type="button" onClick={() => void refreshApp()}>
+          看不到登录框？更新应用
+        </button>
+      )}
       {lastSyncedAt && status.tone !== "online" && <p>上次 {formatDateTime(lastSyncedAt)}</p>}
     </section>
   );
@@ -2178,6 +2210,7 @@ function UtilityPanel({
   submitSignup,
   runSync,
   refreshCloudStats,
+  refreshApp,
   notificationPermission,
   requestReminderPermission,
 }: {
@@ -2203,6 +2236,7 @@ function UtilityPanel({
   submitSignup: (event: FormEvent<HTMLFormElement> | MouseEvent<HTMLButtonElement>) => void;
   runSync: () => Promise<void>;
   refreshCloudStats: () => Promise<void>;
+  refreshApp: () => Promise<void>;
   notificationPermission: ReminderPermissionState;
   requestReminderPermission: () => Promise<void>;
 }) {
@@ -2229,6 +2263,7 @@ function UtilityPanel({
           submitSignup={submitSignup}
           runSync={runSync}
           refreshCloudStats={refreshCloudStats}
+          refreshApp={refreshApp}
         />
       </section>
     );
