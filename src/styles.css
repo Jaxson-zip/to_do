@@ -461,24 +461,16 @@ svg {
   gap: 6px;
 }
 
-.mini-auth.otp-auth {
+.mini-auth.password-auth {
   grid-template-columns: minmax(0, 1fr) 46px 46px;
 }
 
-.mini-auth.otp-auth span {
+.mini-auth.password-auth input {
   grid-column: 1 / -1;
-  min-width: 0;
-  overflow: hidden;
-  color: #888;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.mini-auth.otp-auth input {
-  grid-column: 1 / -1;
-  text-align: center;
-  letter-spacing: 2px;
+.mini-auth.password-auth button:first-of-type {
+  grid-column: 2;
 }
 
 .mini-auth input,

@@ -18,11 +18,11 @@ import {
   getSession,
   isSupabaseConfigured,
   onAuthChange,
-  signInWithEmail,
+  signInWithPassword,
   signOut,
+  signUpWithPassword,
   sortItems,
   syncWithCloud,
-  verifyEmailOtp,
   type CloudStats,
 } from "./supabase";
 import type { DraftItem, MemoItem, MemoList, Priority, RepeatRule, ViewFilter } from "./types";
@@ -85,8 +85,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [email, setEmail] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [otpSentTo, setOtpSentTo] = useState("");
+  const [password, setPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [creatingList, setCreatingList] = useState(false);
   const [newListName, setNewListName] = useState("");
@@ -141,8 +140,7 @@ export default function App() {
       setPendingSync(false);
       lastSyncedSignatureRef.current = "";
     } else {
-      setOtpCode("");
-      setOtpSentTo("");
+      setPassword("");
       setAuthMessage("");
     }
   }, [session]);
@@ -576,67 +574,38 @@ export default function App() {
     if (selectedListId === listId) selectView("inbox");
   }
 
-  async function submitEmail(event: FormEvent<HTMLFormElement>) {
+  async function submitPasswordLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanEmail = email.trim();
-    if (!cleanEmail) return;
+    if (!cleanEmail || password.length < 6) return;
 
-    setAuthMessage("正在发送验证码...");
+    setAuthMessage("正在登录...");
     setSyncError(null);
 
     try {
-      await signInWithEmail(cleanEmail);
-      setOtpSentTo(cleanEmail);
-      setOtpCode("");
-      setAuthMessage("验证码已发送，请在这里输入邮件里的 6 位数字。邮件仍是链接时，需要先改 Supabase 邮件模板。");
+      await signInWithPassword(cleanEmail, password);
+      setAuthMessage("登录成功，正在同步。");
     } catch (error) {
       setAuthMessage("");
       setSyncError(errorMessage(error, "登录失败"));
     }
   }
 
-  async function submitOtp(event: FormEvent<HTMLFormElement>) {
+  async function submitPasswordSignup(event: FormEvent<HTMLFormElement> | MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
-    const cleanEmail = (otpSentTo || email).trim();
-    const cleanCode = otpCode.replace(/\D/g, "");
-    if (!cleanEmail || cleanCode.length < 6) return;
+    const cleanEmail = email.trim();
+    if (!cleanEmail || password.length < 6) return;
 
-    setAuthMessage("正在验证...");
+    setAuthMessage("正在注册...");
     setSyncError(null);
 
     try {
-      await verifyEmailOtp(cleanEmail, cleanCode);
-      setAuthMessage("登录成功，正在同步。");
-      setOtpCode("");
+      await signUpWithPassword(cleanEmail, password);
+      setAuthMessage("注册成功，正在同步。");
     } catch (error) {
       setAuthMessage("");
-      setSyncError(errorMessage(error, "验证码错误或已过期"));
+      setSyncError(errorMessage(error, "注册失败"));
     }
-  }
-
-  async function resendOtp() {
-    const cleanEmail = otpSentTo.trim();
-    if (!cleanEmail) return;
-
-    setAuthMessage("正在重新发送验证码...");
-    setSyncError(null);
-
-    try {
-      await signInWithEmail(cleanEmail);
-      setOtpCode("");
-      setAuthMessage("新的验证码已发送。");
-    } catch (error) {
-      setAuthMessage("");
-      setSyncError(errorMessage(error, "重发验证码失败"));
-    }
-  }
-
-  function resetOtpLogin() {
-    setOtpCode("");
-    setEmail(otpSentTo);
-    setOtpSentTo("");
-    setAuthMessage("");
-    setSyncError(null);
   }
 
   async function refreshCloudStats() {
@@ -881,9 +850,8 @@ export default function App() {
           session={session}
           email={email}
           setEmail={setEmail}
-          otpCode={otpCode}
-          setOtpCode={setOtpCode}
-          otpSentTo={otpSentTo}
+          password={password}
+          setPassword={setPassword}
           authMessage={authMessage}
           syncError={syncError}
           lastSyncedAt={lastSyncedAt}
@@ -892,10 +860,8 @@ export default function App() {
           localStats={localSyncStats}
           cloudStats={cloudStats}
           cloudStatsLoading={cloudStatsLoading}
-          submitEmail={submitEmail}
-          submitOtp={submitOtp}
-          resendOtp={resendOtp}
-          resetOtpLogin={resetOtpLogin}
+          submitLogin={submitPasswordLogin}
+          submitSignup={submitPasswordSignup}
           runSync={runSync}
           refreshCloudStats={refreshCloudStats}
         />
@@ -1175,9 +1141,8 @@ export default function App() {
             session={session}
             email={email}
             setEmail={setEmail}
-            otpCode={otpCode}
-            setOtpCode={setOtpCode}
-            otpSentTo={otpSentTo}
+            password={password}
+            setPassword={setPassword}
             authMessage={authMessage}
             syncError={syncError}
             lastSyncedAt={lastSyncedAt}
@@ -1186,10 +1151,8 @@ export default function App() {
             localStats={localSyncStats}
             cloudStats={cloudStats}
             cloudStatsLoading={cloudStatsLoading}
-            submitEmail={submitEmail}
-            submitOtp={submitOtp}
-            resendOtp={resendOtp}
-            resetOtpLogin={resetOtpLogin}
+            submitLogin={submitPasswordLogin}
+            submitSignup={submitPasswordSignup}
             runSync={runSync}
             refreshCloudStats={refreshCloudStats}
             notificationPermission={notificationPermission}
@@ -1306,9 +1269,8 @@ function SyncBox({
   session,
   email,
   setEmail,
-  otpCode,
-  setOtpCode,
-  otpSentTo,
+  password,
+  setPassword,
   authMessage,
   syncError,
   lastSyncedAt,
@@ -1317,19 +1279,16 @@ function SyncBox({
   localStats,
   cloudStats,
   cloudStatsLoading,
-  submitEmail,
-  submitOtp,
-  resendOtp,
-  resetOtpLogin,
+  submitLogin,
+  submitSignup,
   runSync,
   refreshCloudStats,
 }: {
   session: Session | null;
   email: string;
   setEmail: (value: string) => void;
-  otpCode: string;
-  setOtpCode: (value: string) => void;
-  otpSentTo: string;
+  password: string;
+  setPassword: (value: string) => void;
   authMessage: string;
   syncError: string | null;
   lastSyncedAt: string | null;
@@ -1338,10 +1297,8 @@ function SyncBox({
   localStats: LocalSyncStats;
   cloudStats: CloudStats | null;
   cloudStatsLoading: boolean;
-  submitEmail: (event: FormEvent<HTMLFormElement>) => void;
-  submitOtp: (event: FormEvent<HTMLFormElement>) => void;
-  resendOtp: () => Promise<void>;
-  resetOtpLogin: () => void;
+  submitLogin: (event: FormEvent<HTMLFormElement>) => void;
+  submitSignup: (event: FormEvent<HTMLFormElement> | MouseEvent<HTMLButtonElement>) => void;
   runSync: () => Promise<void>;
   refreshCloudStats: () => Promise<void>;
 }) {
@@ -1357,8 +1314,8 @@ function SyncBox({
         {status.text}
       </p>
 
-      {isSupabaseConfigured && !session && !otpSentTo && (
-        <form className="mini-auth" onSubmit={submitEmail}>
+      {isSupabaseConfigured && !session && (
+        <form className="mini-auth password-auth" onSubmit={submitLogin}>
           <input
             type="email"
             value={email}
@@ -1367,30 +1324,19 @@ function SyncBox({
             aria-label="邮箱"
             autoComplete="email"
           />
-          <button type="submit">发送</button>
-        </form>
-      )}
-
-      {isSupabaseConfigured && !session && otpSentTo && (
-        <form className="mini-auth otp-auth" onSubmit={submitOtp}>
-          <span>{otpSentTo}</span>
           <input
-            inputMode="numeric"
-            maxLength={6}
-            value={otpCode}
-            onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="6 位验证码"
-            aria-label="验证码"
-            autoComplete="one-time-code"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="密码，至少 6 位"
+            aria-label="密码"
+            autoComplete="current-password"
           />
-          <button type="submit" disabled={otpCode.length < 6}>
-            验证
+          <button type="submit" disabled={!email.trim() || password.length < 6}>
+            登录
           </button>
-          <button type="button" onClick={() => void resendOtp()}>
-            重发
-          </button>
-          <button type="button" onClick={resetOtpLogin}>
-            改邮箱
+          <button type="button" disabled={!email.trim() || password.length < 6} onClick={(event) => submitSignup(event)}>
+            注册
           </button>
         </form>
       )}
@@ -2218,9 +2164,8 @@ function UtilityPanel({
   session,
   email,
   setEmail,
-  otpCode,
-  setOtpCode,
-  otpSentTo,
+  password,
+  setPassword,
   authMessage,
   syncError,
   lastSyncedAt,
@@ -2229,10 +2174,8 @@ function UtilityPanel({
   localStats,
   cloudStats,
   cloudStatsLoading,
-  submitEmail,
-  submitOtp,
-  resendOtp,
-  resetOtpLogin,
+  submitLogin,
+  submitSignup,
   runSync,
   refreshCloudStats,
   notificationPermission,
@@ -2246,9 +2189,8 @@ function UtilityPanel({
   session: Session | null;
   email: string;
   setEmail: (value: string) => void;
-  otpCode: string;
-  setOtpCode: (value: string) => void;
-  otpSentTo: string;
+  password: string;
+  setPassword: (value: string) => void;
   authMessage: string;
   syncError: string | null;
   lastSyncedAt: string | null;
@@ -2257,10 +2199,8 @@ function UtilityPanel({
   localStats: LocalSyncStats;
   cloudStats: CloudStats | null;
   cloudStatsLoading: boolean;
-  submitEmail: (event: FormEvent<HTMLFormElement>) => void;
-  submitOtp: (event: FormEvent<HTMLFormElement>) => void;
-  resendOtp: () => Promise<void>;
-  resetOtpLogin: () => void;
+  submitLogin: (event: FormEvent<HTMLFormElement>) => void;
+  submitSignup: (event: FormEvent<HTMLFormElement> | MouseEvent<HTMLButtonElement>) => void;
   runSync: () => Promise<void>;
   refreshCloudStats: () => Promise<void>;
   notificationPermission: ReminderPermissionState;
@@ -2275,9 +2215,8 @@ function UtilityPanel({
           session={session}
           email={email}
           setEmail={setEmail}
-          otpCode={otpCode}
-          setOtpCode={setOtpCode}
-          otpSentTo={otpSentTo}
+          password={password}
+          setPassword={setPassword}
           authMessage={authMessage}
           syncError={syncError}
           lastSyncedAt={lastSyncedAt}
@@ -2286,10 +2225,8 @@ function UtilityPanel({
           localStats={localStats}
           cloudStats={cloudStats}
           cloudStatsLoading={cloudStatsLoading}
-          submitEmail={submitEmail}
-          submitOtp={submitOtp}
-          resendOtp={resendOtp}
-          resetOtpLogin={resetOtpLogin}
+          submitLogin={submitLogin}
+          submitSignup={submitSignup}
           runSync={runSync}
           refreshCloudStats={refreshCloudStats}
         />

@@ -21,7 +21,7 @@ PowerShell 里如果 `npm` 不在 PATH，可以直接调用 `npm.cmd`：
 - 重复任务：每天、每周、每月
 - 四象限视图
 - 番茄专注，自定义专注和休息时长
-- Supabase 邮箱验证码登录和多端同步
+- Supabase 邮箱密码登录和多端同步
 - iPhone 添加到主屏幕
 
 ## Supabase
@@ -41,7 +41,7 @@ VITE_SUPABASE_ANON_KEY=你的 Publishable/Anon key
 Supabase 控制台还需要确认：
 
 - Authentication > Providers > Email 已启用。
-- Email 登录使用 6 位验证码。如果邮件仍然是登录链接，需要到 Authentication > Email Templates > Magic Link，把邮件正文改成包含 `{{ .Token }}`，例如 `验证码：{{ .Token }}`。
+- 建议在 Authentication > Providers > Email 关闭 Confirm email。这样个人使用时注册不会触发邮件发送，也不会撞到 Supabase 内置邮件限流。
 - Authentication > URL Configuration > Redirect URLs 加入本地地址，例如 `http://localhost:5173`。
 - 部署后把 Vercel 的正式 HTTPS 地址也加入 Redirect URLs。
 

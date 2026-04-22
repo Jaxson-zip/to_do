@@ -59,23 +59,20 @@ export function onAuthChange(callback: (session: Session | null) => void): () =>
   return () => data.subscription.unsubscribe();
 }
 
-export async function signInWithEmail(email: string): Promise<void> {
+export async function signInWithPassword(email: string, password: string): Promise<void> {
   if (!supabase) return;
-  const { error } = await supabase.auth.signInWithOtp({
+  const { error } = await supabase.auth.signInWithPassword({
     email,
-    options: {
-      shouldCreateUser: true,
-    },
+    password,
   });
   if (error) throw error;
 }
 
-export async function verifyEmailOtp(email: string, token: string): Promise<void> {
+export async function signUpWithPassword(email: string, password: string): Promise<void> {
   if (!supabase) return;
-  const { error } = await supabase.auth.verifyOtp({
+  const { error } = await supabase.auth.signUp({
     email,
-    token,
-    type: "email",
+    password,
   });
   if (error) throw error;
 }
