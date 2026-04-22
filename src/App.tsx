@@ -22,6 +22,7 @@ import {
   signOut,
   sortItems,
   syncWithCloud,
+  verifyEmailOtp,
   type CloudStats,
 } from "./supabase";
 import type { DraftItem, MemoItem, MemoList, Priority, RepeatRule, ViewFilter } from "./types";
@@ -84,6 +85,8 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSentTo, setOtpSentTo] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [creatingList, setCreatingList] = useState(false);
   const [newListName, setNewListName] = useState("");
@@ -137,6 +140,10 @@ export default function App() {
       setCloudStats(null);
       setPendingSync(false);
       lastSyncedSignatureRef.current = "";
+    } else {
+      setOtpCode("");
+      setOtpSentTo("");
+      setAuthMessage("");
     }
   }, [session]);
 
@@ -574,16 +581,62 @@ export default function App() {
     const cleanEmail = email.trim();
     if (!cleanEmail) return;
 
-    setAuthMessage("正在发送登录邮件...");
+    setAuthMessage("正在发送验证码...");
     setSyncError(null);
 
     try {
       await signInWithEmail(cleanEmail);
-      setAuthMessage("登录链接已发送，去邮箱点一下。");
+      setOtpSentTo(cleanEmail);
+      setOtpCode("");
+      setAuthMessage("验证码已发送，请在这里输入邮件里的 6 位数字。");
     } catch (error) {
       setAuthMessage("");
       setSyncError(error instanceof Error ? error.message : "登录失败");
     }
+  }
+
+  async function submitOtp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const cleanEmail = (otpSentTo || email).trim();
+    const cleanCode = otpCode.replace(/\D/g, "");
+    if (!cleanEmail || cleanCode.length < 6) return;
+
+    setAuthMessage("正在验证...");
+    setSyncError(null);
+
+    try {
+      await verifyEmailOtp(cleanEmail, cleanCode);
+      setAuthMessage("登录成功，正在同步。");
+      setOtpCode("");
+    } catch (error) {
+      setAuthMessage("");
+      setSyncError(error instanceof Error ? error.message : "验证码错误或已过期");
+    }
+  }
+
+  async function resendOtp() {
+    const cleanEmail = otpSentTo.trim();
+    if (!cleanEmail) return;
+
+    setAuthMessage("正在重新发送验证码...");
+    setSyncError(null);
+
+    try {
+      await signInWithEmail(cleanEmail);
+      setOtpCode("");
+      setAuthMessage("新的验证码已发送。");
+    } catch (error) {
+      setAuthMessage("");
+      setSyncError(error instanceof Error ? error.message : "重发验证码失败");
+    }
+  }
+
+  function resetOtpLogin() {
+    setOtpCode("");
+    setEmail(otpSentTo);
+    setOtpSentTo("");
+    setAuthMessage("");
+    setSyncError(null);
   }
 
   async function refreshCloudStats() {
@@ -828,6 +881,9 @@ export default function App() {
           session={session}
           email={email}
           setEmail={setEmail}
+          otpCode={otpCode}
+          setOtpCode={setOtpCode}
+          otpSentTo={otpSentTo}
           authMessage={authMessage}
           syncError={syncError}
           lastSyncedAt={lastSyncedAt}
@@ -837,6 +893,9 @@ export default function App() {
           cloudStats={cloudStats}
           cloudStatsLoading={cloudStatsLoading}
           submitEmail={submitEmail}
+          submitOtp={submitOtp}
+          resendOtp={resendOtp}
+          resetOtpLogin={resetOtpLogin}
           runSync={runSync}
           refreshCloudStats={refreshCloudStats}
         />
@@ -1116,6 +1175,9 @@ export default function App() {
             session={session}
             email={email}
             setEmail={setEmail}
+            otpCode={otpCode}
+            setOtpCode={setOtpCode}
+            otpSentTo={otpSentTo}
             authMessage={authMessage}
             syncError={syncError}
             lastSyncedAt={lastSyncedAt}
@@ -1125,6 +1187,9 @@ export default function App() {
             cloudStats={cloudStats}
             cloudStatsLoading={cloudStatsLoading}
             submitEmail={submitEmail}
+            submitOtp={submitOtp}
+            resendOtp={resendOtp}
+            resetOtpLogin={resetOtpLogin}
             runSync={runSync}
             refreshCloudStats={refreshCloudStats}
             notificationPermission={notificationPermission}
@@ -1241,6 +1306,9 @@ function SyncBox({
   session,
   email,
   setEmail,
+  otpCode,
+  setOtpCode,
+  otpSentTo,
   authMessage,
   syncError,
   lastSyncedAt,
@@ -1250,12 +1318,18 @@ function SyncBox({
   cloudStats,
   cloudStatsLoading,
   submitEmail,
+  submitOtp,
+  resendOtp,
+  resetOtpLogin,
   runSync,
   refreshCloudStats,
 }: {
   session: Session | null;
   email: string;
   setEmail: (value: string) => void;
+  otpCode: string;
+  setOtpCode: (value: string) => void;
+  otpSentTo: string;
   authMessage: string;
   syncError: string | null;
   lastSyncedAt: string | null;
@@ -1265,6 +1339,9 @@ function SyncBox({
   cloudStats: CloudStats | null;
   cloudStatsLoading: boolean;
   submitEmail: (event: FormEvent<HTMLFormElement>) => void;
+  submitOtp: (event: FormEvent<HTMLFormElement>) => void;
+  resendOtp: () => Promise<void>;
+  resetOtpLogin: () => void;
   runSync: () => Promise<void>;
   refreshCloudStats: () => Promise<void>;
 }) {
@@ -1280,7 +1357,7 @@ function SyncBox({
         {status.text}
       </p>
 
-      {isSupabaseConfigured && !session && (
+      {isSupabaseConfigured && !session && !otpSentTo && (
         <form className="mini-auth" onSubmit={submitEmail}>
           <input
             type="email"
@@ -1288,8 +1365,33 @@ function SyncBox({
             onChange={(event) => setEmail(event.target.value)}
             placeholder="邮箱"
             aria-label="邮箱"
+            autoComplete="email"
           />
-          <button type="submit">登录</button>
+          <button type="submit">发送</button>
+        </form>
+      )}
+
+      {isSupabaseConfigured && !session && otpSentTo && (
+        <form className="mini-auth otp-auth" onSubmit={submitOtp}>
+          <span>{otpSentTo}</span>
+          <input
+            inputMode="numeric"
+            maxLength={6}
+            value={otpCode}
+            onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+            placeholder="6 位验证码"
+            aria-label="验证码"
+            autoComplete="one-time-code"
+          />
+          <button type="submit" disabled={otpCode.length < 6}>
+            验证
+          </button>
+          <button type="button" onClick={() => void resendOtp()}>
+            重发
+          </button>
+          <button type="button" onClick={resetOtpLogin}>
+            改邮箱
+          </button>
         </form>
       )}
 
@@ -2116,6 +2218,9 @@ function UtilityPanel({
   session,
   email,
   setEmail,
+  otpCode,
+  setOtpCode,
+  otpSentTo,
   authMessage,
   syncError,
   lastSyncedAt,
@@ -2125,6 +2230,9 @@ function UtilityPanel({
   cloudStats,
   cloudStatsLoading,
   submitEmail,
+  submitOtp,
+  resendOtp,
+  resetOtpLogin,
   runSync,
   refreshCloudStats,
   notificationPermission,
@@ -2138,6 +2246,9 @@ function UtilityPanel({
   session: Session | null;
   email: string;
   setEmail: (value: string) => void;
+  otpCode: string;
+  setOtpCode: (value: string) => void;
+  otpSentTo: string;
   authMessage: string;
   syncError: string | null;
   lastSyncedAt: string | null;
@@ -2147,6 +2258,9 @@ function UtilityPanel({
   cloudStats: CloudStats | null;
   cloudStatsLoading: boolean;
   submitEmail: (event: FormEvent<HTMLFormElement>) => void;
+  submitOtp: (event: FormEvent<HTMLFormElement>) => void;
+  resendOtp: () => Promise<void>;
+  resetOtpLogin: () => void;
   runSync: () => Promise<void>;
   refreshCloudStats: () => Promise<void>;
   notificationPermission: ReminderPermissionState;
@@ -2161,6 +2275,9 @@ function UtilityPanel({
           session={session}
           email={email}
           setEmail={setEmail}
+          otpCode={otpCode}
+          setOtpCode={setOtpCode}
+          otpSentTo={otpSentTo}
           authMessage={authMessage}
           syncError={syncError}
           lastSyncedAt={lastSyncedAt}
@@ -2170,6 +2287,9 @@ function UtilityPanel({
           cloudStats={cloudStats}
           cloudStatsLoading={cloudStatsLoading}
           submitEmail={submitEmail}
+          submitOtp={submitOtp}
+          resendOtp={resendOtp}
+          resetOtpLogin={resetOtpLogin}
           runSync={runSync}
           refreshCloudStats={refreshCloudStats}
         />

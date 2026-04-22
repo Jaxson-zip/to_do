@@ -461,6 +461,26 @@ svg {
   gap: 6px;
 }
 
+.mini-auth.otp-auth {
+  grid-template-columns: minmax(0, 1fr) 46px 46px;
+}
+
+.mini-auth.otp-auth span {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  color: #888;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-auth.otp-auth input {
+  grid-column: 1 / -1;
+  text-align: center;
+  letter-spacing: 2px;
+}
+
 .mini-auth input,
 .mini-auth button,
 .signed-row button {
@@ -475,6 +495,11 @@ svg {
 .mini-auth input {
   min-width: 0;
   padding: 0 8px;
+}
+
+.mini-auth button:disabled {
+  color: #aaa;
+  background: #f8f8f8;
 }
 
 .signed-row {
