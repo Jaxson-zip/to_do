@@ -48,6 +48,7 @@ type RailPanel = "tasks" | "calendar" | "matrix" | "focus" | "search" | "sync" |
 type SortMode = "smart" | "time" | "priority";
 type CalendarViewMode = "day" | "month" | "year";
 type MatrixQuadrant = "urgentImportant" | "important" | "urgent" | "later";
+type ReminderPermissionState = NotificationPermission | "unsupported";
 type LocalSyncStats = {
   items: number;
   openItems: number;
@@ -105,12 +106,16 @@ export default function App() {
   const [breakMinutes, setBreakMinutes] = useState(initialFocusSettings.breakMinutes);
   const [focusSeconds, setFocusSeconds] = useState(initialFocusSettings.focusMinutes * 60);
   const [focusRunning, setFocusRunning] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<ReminderPermissionState>(() =>
+    "Notification" in window ? Notification.permission : "unsupported"
+  );
   const latestItemsRef = useRef(items);
   const latestListsRef = useRef(lists);
   const sessionRef = useRef(session);
   const syncingRef = useRef(false);
   const queuedSyncRef = useRef(false);
   const lastSyncedSignatureRef = useRef("");
+  const notifiedReminderRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     latestItemsRef.current = items;
@@ -201,6 +206,35 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [focusRunning]);
 
+  useEffect(() => {
+    const checkDueReminders = () => {
+      const now = Date.now();
+      const staleAfter = now - 60_000;
+
+      for (const item of items) {
+        if (!item.reminderAt || item.status !== "open" || item.deletedAt || item.archived) continue;
+        const reminderTime = new Date(item.reminderAt).getTime();
+        if (!Number.isFinite(reminderTime) || reminderTime > now || reminderTime < staleAfter) continue;
+
+        const reminderKey = `${item.id}:${item.reminderAt}`;
+        if (notifiedReminderRef.current.has(reminderKey)) continue;
+        notifiedReminderRef.current.add(reminderKey);
+
+        showNotice(`提醒：${item.title}`);
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("待办提醒", {
+            body: item.title,
+            tag: reminderKey,
+          });
+        }
+      }
+    };
+
+    checkDueReminders();
+    const intervalId = window.setInterval(checkDueReminders, 30_000);
+    return () => window.clearInterval(intervalId);
+  }, [items]);
+
   const activeLists = useMemo(() => lists.filter((list) => !list.archived), [lists]);
   const selectedList = useMemo(
     () => activeLists.find((list) => list.id === selectedListId) ?? null,
@@ -223,7 +257,7 @@ export default function App() {
     view,
   ]);
   const selectedItem = useMemo(
-    () => items.find((item) => item.id === selectedId && !item.deletedAt) ?? null,
+    () => items.find((item) => item.id === selectedId) ?? null,
     [items, selectedId]
   );
   const deleteListTarget = useMemo(
@@ -328,7 +362,16 @@ export default function App() {
   function softDelete(id: string) {
     const item = items.find((value) => value.id === id);
     if (item) setUndoItem(item);
-    patchItem(id, { deletedAt: nowIso(), archived: true });
+    patchItem(id, { deletedAt: nowIso(), archived: false });
+    if (selectedId === id) setSelectedId(null);
+  }
+
+  function restoreItem(id: string) {
+    patchItem(id, { deletedAt: null, archived: false });
+  }
+
+  function permanentlyDelete(id: string) {
+    updateItems((current) => current.filter((item) => item.id !== id));
     if (selectedId === id) setSelectedId(null);
   }
 
@@ -458,6 +501,18 @@ export default function App() {
     window.setTimeout(() => {
       setNotice((current) => (current === message ? null : current));
     }, 2800);
+  }
+
+  async function requestReminderPermission() {
+    if (!("Notification" in window)) {
+      setNotificationPermission("unsupported");
+      showNotice("当前浏览器不支持系统通知");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    showNotice(permission === "granted" ? "提醒通知已开启" : "提醒通知未开启");
   }
 
   function selectTag(tag: string) {
@@ -1025,7 +1080,10 @@ export default function App() {
             <TaskListView
               groupedItems={groupedItems}
               selectedId={selectedId}
+              view={view}
               patchItem={patchItem}
+              restoreItem={restoreItem}
+              permanentlyDelete={permanentlyDelete}
               setSelectedId={(id) => {
                 setActivePanel("tasks");
                 setSelectedId(id);
@@ -1044,6 +1102,8 @@ export default function App() {
             lists={activeLists}
             onChange={(patch) => patchItem(selectedItem.id, patch)}
             onDelete={softDelete}
+            onRestore={restoreItem}
+            onPermanentlyDelete={permanentlyDelete}
             onClose={() => setSelectedId(null)}
           />
         ) : (
@@ -1067,6 +1127,8 @@ export default function App() {
             submitEmail={submitEmail}
             runSync={runSync}
             refreshCloudStats={refreshCloudStats}
+            notificationPermission={notificationPermission}
+            requestReminderPermission={requestReminderPermission}
           />
         )}
       </aside>
@@ -1284,14 +1346,22 @@ function SyncBox({
 function TaskListView({
   groupedItems,
   selectedId,
+  view,
   patchItem,
+  restoreItem,
+  permanentlyDelete,
   setSelectedId,
 }: {
   groupedItems: Array<{ title: string; items: MemoItem[] }>;
   selectedId: string | null;
+  view: ViewFilter;
   patchItem: (id: string, patch: Partial<MemoItem>) => void;
+  restoreItem: (id: string) => void;
+  permanentlyDelete: (id: string) => void;
   setSelectedId: (id: string) => void;
 }) {
+  const isTrashView = view === "archive";
+
   return (
     <div className="task-list" aria-label="任务列表">
       {groupedItems.length === 0 ? (
@@ -1306,7 +1376,9 @@ function TaskListView({
             </div>
             {group.items.map((item) => (
               <article
-                className={`task-row ${selectedId === item.id ? "selected" : ""} ${item.status === "done" ? "done" : ""}`}
+                className={`task-row ${selectedId === item.id ? "selected" : ""} ${item.status === "done" ? "done" : ""} ${
+                  item.deletedAt ? "deleted" : ""
+                }`}
                 key={item.id}
                 onClick={() => setSelectedId(item.id)}
               >
@@ -1318,7 +1390,7 @@ function TaskListView({
                     event.stopPropagation();
                     patchItem(item.id, { status: item.status === "done" ? "open" : "done" });
                   }}
-                  disabled={item.kind === "note"}
+                  disabled={item.kind === "note" || Boolean(item.deletedAt)}
                 >
                   {item.status === "done" && <Icon name="check" />}
                 </button>
@@ -1339,28 +1411,59 @@ function TaskListView({
                   )}
                 </div>
 
-                <button
-                  className={item.pinned ? "tiny-action active" : "tiny-action"}
-                  type="button"
-                  aria-label={item.pinned ? "取消置顶" : "置顶"}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    patchItem(item.id, { pinned: !item.pinned });
-                  }}
-                >
-                  <Icon name="pin" />
-                </button>
-                <button
-                  className="tiny-action"
-                  type="button"
-                  aria-label={item.archived ? "移出归档" : "归档"}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    patchItem(item.id, { archived: !item.archived });
-                  }}
-                >
-                  <Icon name="archive" />
-                </button>
+                {isTrashView ? (
+                  <>
+                    <button
+                      className="tiny-action active"
+                      type="button"
+                      aria-label="恢复"
+                      title="恢复"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        restoreItem(item.id);
+                      }}
+                    >
+                      <Icon name="archive" />
+                    </button>
+                    <button
+                      className="tiny-action danger"
+                      type="button"
+                      aria-label="彻底删除"
+                      title="彻底删除"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        permanentlyDelete(item.id);
+                      }}
+                    >
+                      <Icon name="trash" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className={item.pinned ? "tiny-action active" : "tiny-action"}
+                      type="button"
+                      aria-label={item.pinned ? "取消置顶" : "置顶"}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        patchItem(item.id, { pinned: !item.pinned });
+                      }}
+                    >
+                      <Icon name="pin" />
+                    </button>
+                    <button
+                      className="tiny-action"
+                      type="button"
+                      aria-label={item.archived ? "移出归档" : "归档"}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        patchItem(item.id, { archived: !item.archived });
+                      }}
+                    >
+                      <Icon name="archive" />
+                    </button>
+                  </>
+                )}
               </article>
             ))}
           </section>
@@ -1838,16 +1941,29 @@ function ItemEditor({
   lists,
   onChange,
   onDelete,
+  onRestore,
+  onPermanentlyDelete,
   onClose,
 }: {
   item: MemoItem;
   lists: MemoList[];
   onChange: (patch: Partial<MemoItem>) => void;
   onDelete: (id: string) => void;
+  onRestore: (id: string) => void;
+  onPermanentlyDelete: (id: string) => void;
   onClose: () => void;
 }) {
   const selectedList = lists.find((list) => list.id === item.listId);
-  const statusLabel = item.kind === "note" ? "备忘" : item.status === "done" ? "已完成" : "进行中";
+  const inTrash = Boolean(item.deletedAt || item.archived);
+  const statusLabel = item.deletedAt
+    ? "已删除"
+    : item.archived
+      ? "已归档"
+      : item.kind === "note"
+        ? "备忘"
+        : item.status === "done"
+          ? "已完成"
+          : "进行中";
 
   return (
     <div className="task-detail">
@@ -1855,7 +1971,7 @@ function ItemEditor({
         <button
           className={item.status === "done" ? "detail-check done" : "detail-check"}
           type="button"
-          disabled={item.kind === "note"}
+          disabled={item.kind === "note" || inTrash}
           onClick={() => onChange({ status: item.status === "done" ? "open" : "done" })}
           aria-label={item.status === "done" ? "标记未完成" : "标记完成"}
         >
@@ -1866,15 +1982,28 @@ function ItemEditor({
           <button type="button" onClick={onClose}>
             关闭
           </button>
-          <button type="button" onClick={() => onChange({ pinned: !item.pinned })}>
-            {item.pinned ? "取消置顶" : "置顶"}
-          </button>
-          <button type="button" onClick={() => onChange({ archived: !item.archived })}>
-            {item.archived ? "移出归档" : "归档"}
-          </button>
-          <button type="button" className="danger-text" onClick={() => onDelete(item.id)}>
-            删除
-          </button>
+          {inTrash ? (
+            <>
+              <button type="button" onClick={() => onRestore(item.id)}>
+                恢复
+              </button>
+              <button type="button" className="danger-text" onClick={() => onPermanentlyDelete(item.id)}>
+                彻底删除
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={() => onChange({ pinned: !item.pinned })}>
+                {item.pinned ? "取消置顶" : "置顶"}
+              </button>
+              <button type="button" onClick={() => onChange({ archived: !item.archived })}>
+                归档
+              </button>
+              <button type="button" className="danger-text" onClick={() => onDelete(item.id)}>
+                删除
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1998,6 +2127,8 @@ function UtilityPanel({
   submitEmail,
   runSync,
   refreshCloudStats,
+  notificationPermission,
+  requestReminderPermission,
 }: {
   panel: RailPanel;
   items: MemoItem[];
@@ -2018,6 +2149,8 @@ function UtilityPanel({
   submitEmail: (event: FormEvent<HTMLFormElement>) => void;
   runSync: () => Promise<void>;
   refreshCloudStats: () => Promise<void>;
+  notificationPermission: ReminderPermissionState;
+  requestReminderPermission: () => Promise<void>;
 }) {
   if (panel === "sync") {
     return (
@@ -2076,6 +2209,21 @@ function UtilityPanel({
             <span>最近7天</span>
           </div>
         </div>
+        {panel === "reminders" && (
+          <div className="reminder-permission">
+            <div>
+              <strong>本机提醒</strong>
+              <span>{notificationPermissionLabel(notificationPermission)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => void requestReminderPermission()}
+              disabled={notificationPermission === "granted" || notificationPermission === "unsupported"}
+            >
+              {notificationPermission === "granted" ? "已开启" : "开启提醒"}
+            </button>
+          </div>
+        )}
         <div className="utility-list">
           {dated.length === 0 ? (
             <p>暂无带日期的任务。</p>
@@ -2283,7 +2431,7 @@ function getCounts(items: MemoItem[]) {
     pinned: open.filter((item) => item.pinned).length,
     notes: active.filter((item) => item.kind === "note").length,
     done: active.filter((item) => item.status === "done").length,
-    archived: items.filter((item) => item.archived && !item.deletedAt).length,
+    archived: items.filter((item) => item.archived || item.deletedAt).length,
   };
 }
 
@@ -2391,10 +2539,9 @@ function filterItems(
   const weekEnd = addDays(today, 7);
 
   return items
-    .filter((item) => !item.deletedAt)
     .filter((item) => {
-      if (view === "archive") return item.archived;
-      if (item.archived) return false;
+      if (view === "archive") return Boolean(item.archived || item.deletedAt);
+      if (item.archived || item.deletedAt) return false;
       if (view === "today") {
         return (item.dueDate === today || item.reminderAt?.startsWith(today)) && item.status === "open";
       }
@@ -2509,6 +2656,13 @@ function repeatRuleLabel(rule: RepeatRule): string {
   if (rule === "weekly") return "每周重复";
   if (rule === "monthly") return "每月重复";
   return "不重复";
+}
+
+function notificationPermissionLabel(permission: ReminderPermissionState): string {
+  if (permission === "granted") return "已开启，应用打开时会弹出系统通知。";
+  if (permission === "denied") return "浏览器已拒绝通知，需要在站点设置里重新允许。";
+  if (permission === "unsupported") return "当前浏览器不支持系统通知。";
+  return "未开启，只会显示应用内提示。";
 }
 
 function getSyncStatus(

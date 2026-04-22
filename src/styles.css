@@ -1602,6 +1602,11 @@ svg {
   text-decoration: line-through;
 }
 
+.task-row.deleted .task-copy h2,
+.task-row.deleted .task-copy p {
+  color: #9a9a9a;
+}
+
 .checkbox {
   display: grid;
   place-items: center;
@@ -1675,6 +1680,10 @@ svg {
 .tiny-action.active {
   color: var(--gold);
   opacity: 1;
+}
+
+.tiny-action.danger {
+  color: var(--red);
 }
 
 .empty-list {
@@ -2016,6 +2025,51 @@ svg {
   margin-top: 9px;
   color: #999;
   font-size: 12px;
+}
+
+.reminder-permission {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.reminder-permission div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.reminder-permission strong {
+  color: #333;
+  font-size: 14px;
+}
+
+.reminder-permission span {
+  color: #888;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.reminder-permission button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #d7d7d7;
+  border-radius: 6px;
+  background: #fff;
+  color: #444;
+}
+
+.reminder-permission button:not(:disabled):hover {
+  background: #f4f7ff;
+}
+
+.reminder-permission button:disabled {
+  color: #aaa;
 }
 
 .utility-list,
