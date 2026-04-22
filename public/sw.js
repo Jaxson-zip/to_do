@@ -1,4 +1,4 @@
-const CACHE_NAME = "todo-memo-v2";
+const CACHE_NAME = "todo-memo-v4";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -18,9 +18,15 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
+  const url = new URL(event.request.url);
+  const isSameOrigin = url.origin === self.location.origin;
+  const isBuildAsset = isSameOrigin && url.pathname.startsWith("/assets/");
+
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: isBuildAsset ? "no-cache" : "default" })
       .then((response) => {
+        if (!response || response.status !== 200 || !isSameOrigin) return response;
+
         const clone = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         return response;
