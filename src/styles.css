@@ -1800,10 +1800,16 @@ svg {
   background: #fbfbfb;
 }
 
-.task-row.done .task-copy h2,
-.task-row.done .task-copy p {
-  color: #a8a8a8;
+.task-row.done .task-copy h2 {
+  color: #707070;
   text-decoration: line-through;
+  text-decoration-color: #b8b8b8;
+  text-decoration-thickness: 1px;
+}
+
+.task-row.done .task-copy p {
+  color: #9b9b9b;
+  text-decoration: none;
 }
 
 .task-row.deleted .task-copy h2,
@@ -1830,16 +1836,71 @@ svg {
 }
 
 .checkbox.done {
-  border-color: #64c887;
-  background: #f3fbf5;
-  color: #26a85d;
+  border-color: #22c55e;
+  background: #22c55e;
+  color: #fff;
 }
 
 .task-emoji {
+  display: grid;
+  place-items: center;
   width: 18px;
+  height: 18px;
   flex: 0 0 auto;
-  font-size: 14px;
-  text-align: center;
+  color: transparent;
+  font-size: 0;
+}
+
+.task-emoji::before {
+  display: block;
+  content: "";
+}
+
+.task-emoji.priority-high::before {
+  width: 4px;
+  height: 14px;
+  border-radius: 999px;
+  background: #e05252;
+}
+
+.task-emoji.priority-normal::before {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #8f8f8f;
+}
+
+.task-emoji.priority-low::before {
+  width: 8px;
+  height: 8px;
+  border: 1px solid #a7a7a7;
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+
+.task-emoji.note-marker {
+  color: #8f8f8f;
+  font-size: 13px;
+}
+
+.task-emoji.note-marker::before {
+  content: none;
+}
+
+.task-emoji.feature-marker::before,
+.task-emoji.explore-marker::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #5b8def;
+}
+
+.task-emoji.explore-marker::before {
+  transform: rotate(45deg);
+}
+
+.task-row.done .task-emoji {
+  opacity: 0.38;
 }
 
 .task-copy {

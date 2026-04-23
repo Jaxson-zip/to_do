@@ -2271,7 +2271,9 @@ function TaskListView({
                   {item.status === "done" && <Icon name="check" />}
                 </button>
 
-                <span className="task-emoji">{emojiForItem(item)}</span>
+                <span className={itemMarkerClass(item)} aria-hidden="true">
+                  {emojiForItem(item)}
+                </span>
                 <div className="task-copy">
                   <h2>{item.title}</h2>
                   {(item.body || item.tags.length > 0 || item.dueDate || item.reminderAt) && (
@@ -3813,6 +3815,14 @@ function emojiForItem(item: MemoItem): string {
   if (item.tags.includes("功能模块")) return "▣";
   if (item.tags.includes("探索更多")) return "◆";
   return "•";
+}
+
+function itemMarkerClass(item: MemoItem): string {
+  const classes = ["task-emoji", `priority-${item.priority}`];
+  if (item.kind === "note") classes.push("note-marker");
+  if (item.tags.includes("功能模块")) classes.push("feature-marker");
+  if (item.tags.includes("探索更多")) classes.push("explore-marker");
+  return classes.join(" ");
 }
 
 function nextListEmoji(index: number): string {
