@@ -429,6 +429,12 @@ export default function App() {
   function selectView(nextView: ViewFilter) {
     setMoreOpen(false);
     setCreatingList(false);
+    if (nextView === "today") {
+      const today = getToday();
+      setSelectedCalendarDate(today);
+      setCalendarMonth(today.slice(0, 7));
+      setCalendarViewMode("day");
+    }
     setActivePanel(panelForView(nextView));
     setView(nextView);
     setSelectedListId(null);
@@ -2451,6 +2457,8 @@ function MonthCalendar({
   const monthStart = parseMonthKey(month);
   const activeItems = items.filter((item) => !item.deletedAt && !item.archived);
   const selectedItems = activeItems.filter((item) => itemDateKey(item) === selectedDate).sort(sortItems);
+  const dayScheduleSections = buildDayScheduleSections(selectedItems);
+  const timedDayItemCount = selectedItems.filter((item) => Boolean(item.reminderAt)).length;
   const year = monthStart.getFullYear();
 
   if (viewMode === "day") {
@@ -2495,26 +2503,53 @@ function MonthCalendar({
         </div>
 
         <div className="day-view-panel">
-          <div className="day-view-hero">
-            <span>{formatWeekday(selectedDate)}</span>
-            <strong>{formatDayNumber(selectedDate)}</strong>
-            <p>{formatFullDate(selectedDate)}</p>
+          <aside className="day-summary-card">
+            <div className="day-summary-date">
+              <span>{formatWeekday(selectedDate)}</span>
+              <strong>{formatDayNumber(selectedDate)}</strong>
+              <p>{formatFullDate(selectedDate)}</p>
+            </div>
+            <div className="day-summary-metrics">
+              <div>
+                <strong>{selectedItems.length}</strong>
+                <span>安排</span>
+              </div>
+              <div>
+                <strong>{timedDayItemCount}</strong>
+                <span>定时</span>
+              </div>
+            </div>
             <button type="button" onClick={() => onCreateItem(selectedDate)}>
               添加任务
             </button>
-          </div>
-          <div className="day-timeline">
-            {selectedItems.length === 0 ? (
-              <p>这一天还没有安排。</p>
-            ) : (
-              selectedItems.map((item) => (
-                <button type="button" key={item.id} onClick={() => onSelectItem(item.id)}>
-                  <span>{itemTimeLabel(item) || "全天"}</span>
-                  <strong>{item.title}</strong>
-                  <em>{item.priority === "high" ? "重要" : item.priority === "low" ? "低优先级" : "普通"}</em>
-                </button>
-              ))
-            )}
+          </aside>
+          <div className="day-schedule" aria-label={`${formatFullDate(selectedDate)} 日程`}>
+            {dayScheduleSections.map((section) => (
+              <section className="day-schedule-section" key={section.id}>
+                <div className="day-schedule-time">
+                  <strong>{section.label}</strong>
+                  <span>{section.range}</span>
+                </div>
+                <div className="day-schedule-items">
+                  {section.items.length === 0 ? (
+                    <p>无安排</p>
+                  ) : (
+                    section.items.map((item) => (
+                      <button
+                        type="button"
+                        className={`day-schedule-event ${item.priority} ${item.status === "done" ? "done" : ""}`}
+                        key={item.id}
+                        onClick={() => onSelectItem(item.id)}
+                      >
+                        <span>{itemTimeLabel(item) || "全天"}</span>
+                        <strong>{item.title}</strong>
+                        <em>{item.priority === "high" ? "重要" : item.priority === "low" ? "低优先级" : "普通"}</em>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </section>
+            ))}
           </div>
         </div>
       </section>
@@ -3663,6 +3698,52 @@ function itemDateKey(item: MemoItem): string | null {
 function itemTimeLabel(item: MemoItem): string {
   if (!item.reminderAt) return "";
   return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(new Date(item.reminderAt));
+}
+
+function buildDayScheduleSections(items: MemoItem[]): Array<{
+  id: string;
+  label: string;
+  range: string;
+  items: MemoItem[];
+}> {
+  const sections = [
+    { id: "all-day", label: "全天", range: "无具体时间", from: null, to: null, items: [] as MemoItem[] },
+    { id: "morning", label: "上午", range: "06:00-12:00", from: 6 * 60, to: 12 * 60, items: [] as MemoItem[] },
+    { id: "afternoon", label: "下午", range: "12:00-18:00", from: 12 * 60, to: 18 * 60, items: [] as MemoItem[] },
+    { id: "evening", label: "晚上", range: "18:00-24:00", from: 18 * 60, to: 24 * 60, items: [] as MemoItem[] },
+    { id: "late-night", label: "深夜", range: "00:00-06:00", from: 0, to: 6 * 60, items: [] as MemoItem[] },
+  ];
+
+  for (const item of items) {
+    const minutes = itemScheduleMinutes(item);
+    if (minutes === null) {
+      sections[0].items.push(item);
+      continue;
+    }
+
+    const section = sections.find((value) => value.from !== null && minutes >= value.from && minutes < value.to!);
+    (section ?? sections[0]).items.push(item);
+  }
+
+  return sections.map((section) => ({
+    id: section.id,
+    label: section.label,
+    range: section.range,
+    items: section.items.sort(compareScheduleItems),
+  }));
+}
+
+function compareScheduleItems(a: MemoItem, b: MemoItem): number {
+  const aMinutes = itemScheduleMinutes(a);
+  const bMinutes = itemScheduleMinutes(b);
+  if (aMinutes !== bMinutes) return (aMinutes ?? -1) - (bMinutes ?? -1);
+  return sortItems(a, b);
+}
+
+function itemScheduleMinutes(item: MemoItem): number | null {
+  if (!item.reminderAt) return null;
+  const date = new Date(item.reminderAt);
+  return date.getHours() * 60 + date.getMinutes();
 }
 
 function formatDate(value: string): string {

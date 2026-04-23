@@ -1498,45 +1498,73 @@ svg {
 
 .day-view-panel {
   display: grid;
-  grid-template-columns: minmax(220px, 0.42fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(220px, 280px) minmax(320px, 1fr);
   gap: 16px;
   min-height: 0;
 }
 
-.day-view-hero,
-.day-timeline,
+.day-summary-card,
+.day-schedule,
 .year-month-card {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
 }
 
-.day-view-hero {
+.day-summary-card {
   display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 12px;
-  padding: 28px 18px;
-  text-align: center;
+  align-content: start;
+  gap: 18px;
+  padding: 20px;
 }
 
-.day-view-hero span {
+.day-summary-date {
+  display: grid;
+  gap: 8px;
+}
+
+.day-summary-date span {
   color: #999;
   font-size: 13px;
 }
 
-.day-view-hero strong {
+.day-summary-date strong {
   color: #222;
-  font-size: 72px;
+  font-size: 64px;
   line-height: 1;
 }
 
-.day-view-hero p {
+.day-summary-date p {
   margin: 0;
   color: #777;
 }
 
-.day-view-hero button {
+.day-summary-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.day-summary-metrics div {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.day-summary-metrics strong {
+  color: #222;
+  font-size: 18px;
+}
+
+.day-summary-metrics span {
+  color: #999;
+  font-size: 12px;
+}
+
+.day-summary-card button {
   height: 34px;
   padding: 0 14px;
   border: 0;
@@ -1545,43 +1573,95 @@ svg {
   color: #fff;
 }
 
-.day-timeline {
+.day-schedule {
   display: grid;
   align-content: start;
-  gap: 8px;
   min-height: 0;
-  padding: 12px;
   overflow: auto;
 }
 
-.day-timeline > p {
-  margin: 24px 0;
-  color: #aaa;
-  text-align: center;
+.day-schedule-section {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 86px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
 }
 
-.day-timeline button {
+.day-schedule-section:last-child {
+  border-bottom: 0;
+}
+
+.day-schedule-time {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.day-schedule-time strong {
+  color: #333;
+  font-size: 14px;
+}
+
+.day-schedule-time span {
+  color: #aaa;
+  font-size: 12px;
+}
+
+.day-schedule-items {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.day-schedule-items p {
+  margin: 0;
+  padding: 8px 0;
+  color: #b6b6b6;
+  font-size: 13px;
+}
+
+.day-schedule-event {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  min-height: 48px;
+  min-height: 42px;
   padding: 0 12px;
   border: 1px solid var(--line);
+  border-left: 4px solid #8ecfda;
   border-radius: 7px;
   background: #fafafa;
   color: #333;
   text-align: left;
 }
 
-.day-timeline button span,
-.day-timeline button em {
+.day-schedule-event.high {
+  border-left-color: #e48a9b;
+}
+
+.day-schedule-event.low {
+  border-left-color: #d5d978;
+}
+
+.day-schedule-event.done {
+  opacity: 0.58;
+}
+
+.day-schedule-event.done strong {
+  text-decoration: line-through;
+}
+
+.day-schedule-event span,
+.day-schedule-event em {
   color: #999;
   font-size: 12px;
   font-style: normal;
 }
 
-.day-timeline button strong {
+.day-schedule-event strong {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2977,19 +3057,40 @@ svg {
     grid-template-columns: 1fr;
   }
 
-  .day-view-hero {
-    padding: 22px 14px;
+  .day-summary-card {
+    gap: 12px;
+    padding: 16px;
   }
 
-  .day-view-hero strong {
+  .day-summary-date strong {
     font-size: 52px;
   }
 
-  .day-timeline button {
+  .day-summary-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .day-schedule-section {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    min-height: 92px;
+    padding: 12px;
+  }
+
+  .day-schedule-time {
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+  }
+
+  .day-schedule-time span {
+    text-align: right;
+  }
+
+  .day-schedule-event {
     grid-template-columns: 48px minmax(0, 1fr);
   }
 
-  .day-timeline button em {
+  .day-schedule-event em {
     grid-column: 2;
   }
 
