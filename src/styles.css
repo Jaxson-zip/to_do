@@ -2555,6 +2555,11 @@ svg {
     text-align: left;
   }
 
+  .mobile-drawer-section > button.mobile-tag-button {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-left: 14px;
+  }
+
   .mobile-drawer-section > button.active {
     background: #eef3ff;
     color: var(--blue);

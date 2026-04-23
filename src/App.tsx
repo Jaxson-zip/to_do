@@ -1296,7 +1296,7 @@ export default function App() {
                 {tagStats.slice(0, 8).map((tag) => (
                   <button
                     key={tag.name}
-                    className={selectedTag === tag.name ? "active" : ""}
+                    className={selectedTag === tag.name ? "mobile-tag-button active" : "mobile-tag-button"}
                     type="button"
                     onClick={() => {
                       selectTag(tag.name);
