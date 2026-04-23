@@ -65,6 +65,19 @@ const defaultListsSeed: Array<Pick<MemoList, "id" | "name" | "emoji">> = [
   { id: "44444444-4444-4444-8444-444444444444", name: "学习安排", emoji: "📖" },
 ];
 
+const demoItemTitles = new Set([
+  "点击输入框，创建任务",
+  "用清单来管理任务",
+  "日历：日程安排一目了然",
+  "四象限：提升效率利器",
+  "番茄专注：拯救拖延症",
+  "习惯打卡：见证坚持与成长",
+  "看板、时间线视图：可视化管理",
+  "桌面便签：随时记录想法",
+  "订阅日历：不再错过重要日程",
+  "更多特色功能",
+]);
+
 export default function App() {
   const initialFocusSettings = useMemo(() => loadFocusSettings(), []);
   const [lists, setLists] = useState<MemoList[]>(() => initialLists());
@@ -103,6 +116,10 @@ export default function App() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [addExpanded, setAddExpanded] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const [editingTag, setEditingTag] = useState<string | null>(null);
+  const [tagNameDraft, setTagNameDraft] = useState("");
+  const [clearExamplesOpen, setClearExamplesOpen] = useState(false);
   const [undoItem, setUndoItem] = useState<MemoItem | null>(null);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [focusMinutes, setFocusMinutes] = useState(initialFocusSettings.focusMinutes);
@@ -248,6 +265,7 @@ export default function App() {
   );
   const counts = useMemo(() => getCounts(items), [items]);
   const tagStats = useMemo(() => getTagStats(items), [items]);
+  const demoItemCount = useMemo(() => countDemoItems(items), [items]);
   const localSyncStats = useMemo(() => getLocalSyncStats(items, lists), [items, lists]);
   const matrixGroups = useMemo(() => groupMatrixItems(items), [items]);
   const focusItems = useMemo(() => getFocusCandidates(items), [items]);
@@ -479,6 +497,77 @@ export default function App() {
     setActivePanel("focus");
     setSelectedTag(null);
     setSelectedId(null);
+  }
+
+  function openTagManager() {
+    setMoreOpen(false);
+    setMobileMenuOpen(false);
+    setTagManagerOpen(true);
+    setEditingTag(null);
+    setTagNameDraft("");
+  }
+
+  function beginRenameTag(tag: string) {
+    setEditingTag(tag);
+    setTagNameDraft(tag);
+    window.setTimeout(() => document.getElementById(`tag-input-${cssSafeId(tag)}`)?.focus(), 0);
+  }
+
+  function commitRenameTag(tag: string) {
+    const nextTag = parseTags(tagNameDraft)[0] ?? "";
+    setEditingTag(null);
+    setTagNameDraft("");
+
+    if (!nextTag || nextTag === tag) return;
+
+    const updatedAt = nowIso();
+    updateItems((current) =>
+      current.map((item) => {
+        if (!item.tags.includes(tag)) return item;
+        const tags = Array.from(new Set(item.tags.map((value) => (value === tag ? nextTag : value))));
+        return { ...item, tags, updatedAt };
+      })
+    );
+
+    if (selectedTag === tag) setSelectedTag(nextTag);
+    showNotice(`已更新标签 #${nextTag}`);
+  }
+
+  function deleteTag(tag: string) {
+    const updatedAt = nowIso();
+    updateItems((current) =>
+      current.map((item) =>
+        item.tags.includes(tag) ? { ...item, tags: item.tags.filter((value) => value !== tag), updatedAt } : item
+      )
+    );
+    if (selectedTag === tag) setSelectedTag(null);
+    if (editingTag === tag) setEditingTag(null);
+    showNotice(`已移除标签 #${tag}`);
+  }
+
+  function openClearExamples() {
+    setMoreOpen(false);
+    setMobileMenuOpen(false);
+    if (demoItemCount === 0) {
+      showNotice("没有可清理的示例内容");
+      return;
+    }
+    setClearExamplesOpen(true);
+  }
+
+  function clearExampleContent() {
+    const updatedAt = nowIso();
+    const removedIds = new Set(items.filter(isDemoItem).map((item) => item.id));
+
+    updateItems((current) =>
+      current.map((item) =>
+        removedIds.has(item.id) ? { ...item, deletedAt: updatedAt, archived: false, updatedAt } : item
+      )
+    );
+
+    if (selectedId && removedIds.has(selectedId)) setSelectedId(null);
+    setClearExamplesOpen(false);
+    showNotice(`已将 ${removedIds.size} 条示例内容移到垃圾桶`);
   }
 
   async function refreshApp() {
@@ -822,6 +911,9 @@ export default function App() {
         <div className="sidebar-section">
           <div className="section-title">
             <span>标签筛选</span>
+            <button className="section-text-button" type="button" onClick={openTagManager}>
+              管理
+            </button>
           </div>
           {tagStats.length === 0 ? (
             <p className="sidebar-placeholder">暂无标签</p>
@@ -968,6 +1060,12 @@ export default function App() {
                   </button>
                   <button type="button" role="menuitem" onClick={openFocusPanel}>
                     番茄专注
+                  </button>
+                  <button type="button" role="menuitem" onClick={openTagManager}>
+                    管理标签
+                  </button>
+                  <button type="button" role="menuitem" onClick={openClearExamples}>
+                    清除示例内容
                   </button>
                   <button type="button" role="menuitem" onClick={openSyncPanel}>
                     同步
@@ -1325,6 +1423,9 @@ export default function App() {
               <section className="mobile-drawer-section">
                 <div className="mobile-drawer-title">
                   <span>标签筛选</span>
+                  <button type="button" onClick={openTagManager}>
+                    管理
+                  </button>
                 </div>
                 {tagStats.slice(0, 8).map((tag) => (
                   <button
@@ -1368,6 +1469,22 @@ export default function App() {
                   </strong>
                 </button>
               ))}
+            </section>
+
+            <section className="mobile-drawer-section">
+              <div className="mobile-drawer-title">
+                <span>维护</span>
+              </div>
+              <button type="button" onClick={openTagManager}>
+                <Icon name="tag" />
+                <span>管理标签</span>
+                <strong>{tagStats.length}</strong>
+              </button>
+              <button type="button" onClick={openClearExamples}>
+                <Icon name="trash" />
+                <span>清除示例内容</span>
+                <strong>{demoItemCount}</strong>
+              </button>
             </section>
           </aside>
         </div>
@@ -1459,6 +1576,91 @@ export default function App() {
               </button>
               <button type="button" onClick={confirmArchiveList}>
                 删除
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+
+      {tagManagerOpen && (
+        <div className="app-modal-backdrop" role="presentation" onMouseDown={() => setTagManagerOpen(false)}>
+          <section className="app-modal tag-manager-modal" aria-label="标签管理" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <strong>标签管理</strong>
+              <button type="button" aria-label="关闭" onClick={() => setTagManagerOpen(false)}>
+                <Icon name="x" />
+              </button>
+            </header>
+            <p>重命名为已有标签会自动合并；删除标签不会删除任务。</p>
+            <div className="tag-manager-list">
+              {tagStats.length === 0 ? (
+                <p className="sidebar-placeholder">暂无标签</p>
+              ) : (
+                tagStats.map((tag) => (
+                  <div className="tag-manager-row" key={tag.name}>
+                    {editingTag === tag.name ? (
+                      <input
+                        id={`tag-input-${cssSafeId(tag.name)}`}
+                        value={tagNameDraft}
+                        onChange={(event) => setTagNameDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") commitRenameTag(tag.name);
+                          if (event.key === "Escape") {
+                            setEditingTag(null);
+                            setTagNameDraft("");
+                          }
+                        }}
+                      />
+                    ) : (
+                      <button type="button" onClick={() => selectTag(tag.name)}>
+                        #{tag.name}
+                      </button>
+                    )}
+                    <strong>{tag.count}</strong>
+                    {editingTag === tag.name ? (
+                      <button type="button" onClick={() => commitRenameTag(tag.name)}>
+                        保存
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => beginRenameTag(tag.name)}>
+                        重命名
+                      </button>
+                    )}
+                    <button type="button" className="danger-text" onClick={() => deleteTag(tag.name)}>
+                      删除
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            <footer>
+              <button type="button" onClick={openClearExamples}>
+                清除示例内容
+              </button>
+              <button type="button" onClick={() => setTagManagerOpen(false)}>
+                完成
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+
+      {clearExamplesOpen && (
+        <div className="app-modal-backdrop" role="presentation" onMouseDown={() => setClearExamplesOpen(false)}>
+          <section className="app-modal danger" aria-label="清除示例内容" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <strong>清除示例内容</strong>
+              <button type="button" aria-label="关闭" onClick={() => setClearExamplesOpen(false)}>
+                <Icon name="x" />
+              </button>
+            </header>
+            <p>将 {demoItemCount} 条内置演示任务移到垃圾桶，保留你的清单、账号和其他任务。</p>
+            <footer>
+              <button type="button" onClick={() => setClearExamplesOpen(false)}>
+                取消
+              </button>
+              <button type="button" onClick={clearExampleContent}>
+                清除
               </button>
             </footer>
           </section>
@@ -2610,6 +2812,7 @@ type IconName =
   | "search"
   | "sort"
   | "sync"
+  | "tag"
   | "timer"
   | "tray"
   | "trash"
@@ -2635,6 +2838,7 @@ function Icon({ name }: { name: IconName }) {
     search: <path d="M11 5a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm4.5 10.5L20 20" />,
     sort: <path d="M8 6v12M5 9l3-3 3 3M16 18V6M13 15l3 3 3-3" />,
     sync: <path d="M20 7v5h-5M4 17v-5h5M18 9a7 7 0 0 0-11.7-2M6 15a7 7 0 0 0 11.7 2" />,
+    tag: <path d="M4 11V5h6l9 9-6 6zM8 8h.01" />,
     timer: <path d="M9 2h6M12 8v5l3 2M12 5a8 8 0 1 0 0 16 8 8 0 0 0 0-16z" />,
     tray: <path d="M4 13h5l2 3h2l2-3h5M5 5h14l2 8v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z" />,
     trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
@@ -2928,6 +3132,18 @@ function getTagStats(items: MemoItem[]): Array<{ name: string; count: number }> 
   return [...counts.entries()]
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "zh-CN"));
+}
+
+function isDemoItem(item: MemoItem): boolean {
+  return !item.deletedAt && demoItemTitles.has(item.title);
+}
+
+function countDemoItems(items: MemoItem[]): number {
+  return items.filter(isDemoItem).length;
+}
+
+function cssSafeId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, (char) => `-${char.charCodeAt(0).toString(16)}`);
 }
 
 function nextSortMode(mode: SortMode): SortMode {
