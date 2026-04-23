@@ -588,6 +588,12 @@ svg {
   margin-bottom: 22px;
 }
 
+.task-pane-utility {
+  display: grid;
+  justify-items: center;
+  padding: 34px 24px;
+}
+
 .title-group,
 .header-actions,
 .compact-add,
@@ -2335,6 +2341,11 @@ svg {
     padding: max(18px, env(safe-area-inset-top)) 14px 0;
     border-right: 0;
     overflow-x: hidden;
+  }
+
+  .task-pane-utility {
+    justify-items: stretch;
+    padding: 10px 0 24px;
   }
 
   .detail-pane.editing {

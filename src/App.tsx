@@ -957,7 +957,37 @@ export default function App() {
           </div>
         </header>
 
-        {activePanel === "calendar" ? (
+        {activePanel === "sync" || activePanel === "help" || activePanel === "reminders" ? (
+          <div className="task-pane-utility">
+            <UtilityPanel
+              panel={activePanel}
+              items={items}
+              counts={counts}
+              query={query}
+              setQuery={setQuery}
+              session={session}
+              email={email}
+              setEmail={setEmail}
+              password={password}
+              setPassword={setPassword}
+              authMessage={authMessage}
+              syncError={syncError}
+              lastSyncedAt={lastSyncedAt}
+              syncing={syncing}
+              pendingSync={pendingSync}
+              localStats={localSyncStats}
+              cloudStats={cloudStats}
+              cloudStatsLoading={cloudStatsLoading}
+              submitLogin={submitPasswordLogin}
+              submitSignup={submitPasswordSignup}
+              runSync={runSync}
+              refreshCloudStats={refreshCloudStats}
+              refreshApp={refreshApp}
+              notificationPermission={notificationPermission}
+              requestReminderPermission={requestReminderPermission}
+            />
+          </div>
+        ) : activePanel === "calendar" ? (
           <MonthCalendar
             items={items}
             month={calendarMonth}
