@@ -68,6 +68,13 @@ const defaultListsSeed: Array<Pick<MemoList, "id" | "name" | "emoji">> = [
   { id: "44444444-4444-4444-8444-444444444444", name: "学习安排", emoji: "📖" },
 ];
 
+const matrixQuadrants: Array<{ id: MatrixQuadrant; title: string; hint: string; rule: string }> = [
+  { id: "urgentImportant", title: "重要且紧急", hint: "马上处理", rule: "高优先级 + 今天" },
+  { id: "important", title: "重要不紧急", hint: "安排时间", rule: "高优先级" },
+  { id: "urgent", title: "紧急不重要", hint: "快速处理", rule: "今天" },
+  { id: "later", title: "不紧急不重要", hint: "延后或删除", rule: "低优先级" },
+];
+
 const demoItemTitles = new Set([
   "点击输入框，创建任务",
   "用清单来管理任务",
@@ -108,6 +115,8 @@ export default function App() {
   const [newListName, setNewListName] = useState("");
   const [calendarDraftDate, setCalendarDraftDate] = useState<string | null>(null);
   const [calendarDraftTitle, setCalendarDraftTitle] = useState("");
+  const [matrixDraftQuadrant, setMatrixDraftQuadrant] = useState<MatrixQuadrant | null>(null);
+  const [matrixDraftTitle, setMatrixDraftTitle] = useState("");
   const [deleteListId, setDeleteListId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -386,6 +395,51 @@ export default function App() {
     setCalendarDraftDate(null);
     setCalendarDraftTitle("");
     setSelectedCalendarDate(item.dueDate ?? calendarDraftDate);
+  }
+
+  function openMatrixAdd(quadrant: MatrixQuadrant) {
+    setMatrixDraftQuadrant(quadrant);
+    setMatrixDraftTitle("");
+    window.setTimeout(() => document.getElementById("matrix-task-title")?.focus(), 0);
+  }
+
+  function closeMatrixAdd() {
+    setMatrixDraftQuadrant(null);
+    setMatrixDraftTitle("");
+  }
+
+  function addMatrixItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!matrixDraftQuadrant) return;
+
+    const defaults = matrixDraftDefaults(matrixDraftQuadrant);
+    const baseDate = new Date(`${defaults.dueDate ?? getToday()}T09:00:00`);
+    const parsedInput = parseTaskInput(matrixDraftTitle, baseDate);
+    if (!parsedInput.title) return;
+
+    const createdAt = nowIso();
+    const item: MemoItem = {
+      id: createId(),
+      listId: selectedListId ?? defaultListId,
+      title: parsedInput.title,
+      body: "",
+      kind: "task",
+      status: "open",
+      priority: defaults.priority,
+      repeatRule: "none",
+      dueDate: parsedInput.dueDate ?? defaults.dueDate,
+      reminderAt: parsedInput.reminderAt,
+      tags: [],
+      pinned: false,
+      archived: false,
+      deletedAt: null,
+      createdAt,
+      updatedAt: createdAt,
+    };
+
+    updateItems((current) => [item, ...current]);
+    showNotice(`已添加到${matrixQuadrantTitle(matrixDraftQuadrant)}`);
+    closeMatrixAdd();
   }
 
   function patchItem(id: string, patch: Partial<MemoItem>) {
@@ -1258,6 +1312,7 @@ export default function App() {
         ) : activePanel === "matrix" ? (
           <MatrixView
             groups={matrixGroups}
+            onCreateItem={openMatrixAdd}
             patchItem={patchItem}
             setSelectedId={(id) => {
               setActivePanel("tasks");
@@ -1692,6 +1747,42 @@ export default function App() {
                 取消
               </button>
               <button type="submit" disabled={!calendarDraftTitle.trim()}>
+                添加
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+
+      {matrixDraftQuadrant && (
+        <div className="app-modal-backdrop" role="presentation" onMouseDown={closeMatrixAdd}>
+          <form
+            className="app-modal matrix-add-modal"
+            aria-label="添加四象限任务"
+            onSubmit={addMatrixItem}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <strong>添加到{matrixQuadrantTitle(matrixDraftQuadrant)}</strong>
+              <button type="button" aria-label="关闭" onClick={closeMatrixAdd}>
+                <Icon name="x" />
+              </button>
+            </header>
+            <p>{matrixQuadrantModalHint(matrixDraftQuadrant)}</p>
+            <input
+              id="matrix-task-title"
+              value={matrixDraftTitle}
+              onChange={(event) => setMatrixDraftTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") closeMatrixAdd();
+              }}
+              placeholder="例如：晚上5.30体育馆打球"
+            />
+            <footer>
+              <button type="button" onClick={closeMatrixAdd}>
+                取消
+              </button>
+              <button type="submit" disabled={!matrixDraftTitle.trim()}>
                 添加
               </button>
             </footer>
@@ -2254,30 +2345,36 @@ function TaskListView({
 
 function MatrixView({
   groups,
+  onCreateItem,
   patchItem,
   setSelectedId,
 }: {
   groups: Record<MatrixQuadrant, MemoItem[]>;
+  onCreateItem: (quadrant: MatrixQuadrant) => void;
   patchItem: (id: string, patch: Partial<MemoItem>) => void;
   setSelectedId: (id: string) => void;
 }) {
-  const quadrants: Array<{ id: MatrixQuadrant; title: string; hint: string }> = [
-    { id: "urgentImportant", title: "重要且紧急", hint: "马上处理" },
-    { id: "important", title: "重要不紧急", hint: "安排时间" },
-    { id: "urgent", title: "紧急不重要", hint: "快速处理" },
-    { id: "later", title: "不紧急不重要", hint: "延后或删除" },
-  ];
-
   return (
     <section className="matrix-view" aria-label="四象限">
-      {quadrants.map((quadrant) => (
+      {matrixQuadrants.map((quadrant) => (
         <div className={`matrix-column ${quadrant.id}`} key={quadrant.id}>
           <header>
-            <div>
+            <div className="matrix-heading">
               <strong>{quadrant.title}</strong>
-              <span>{quadrant.hint}</span>
+              <span>{quadrant.hint} · {quadrant.rule}</span>
             </div>
-            <em>{groups[quadrant.id].length}</em>
+            <div className="matrix-header-actions">
+              <em>{groups[quadrant.id].length}</em>
+              <button
+                className="matrix-add-button"
+                type="button"
+                aria-label={`添加到${quadrant.title}`}
+                title={`添加到${quadrant.title}`}
+                onClick={() => onCreateItem(quadrant.id)}
+              >
+                <Icon name="plus" />
+              </button>
+            </div>
           </header>
           <div className="matrix-list">
             {groups[quadrant.id].length === 0 ? (
@@ -3365,6 +3462,25 @@ function groupMatrixItems(items: MemoItem[]): Record<MatrixQuadrant, MemoItem[]>
   }
 
   return groups;
+}
+
+function matrixDraftDefaults(quadrant: MatrixQuadrant): { priority: Priority; dueDate: string | null } {
+  if (quadrant === "urgentImportant") return { priority: "high", dueDate: getToday() };
+  if (quadrant === "important") return { priority: "high", dueDate: null };
+  if (quadrant === "urgent") return { priority: "normal", dueDate: getToday() };
+  return { priority: "low", dueDate: null };
+}
+
+function matrixQuadrantTitle(quadrant: MatrixQuadrant): string {
+  return matrixQuadrants.find((item) => item.id === quadrant)?.title ?? "四象限";
+}
+
+function matrixQuadrantModalHint(quadrant: MatrixQuadrant): string {
+  const today = formatDate(getToday());
+  if (quadrant === "urgentImportant") return `默认设为重要，并安排到 ${today}。输入具体时间会自动识别。`;
+  if (quadrant === "important") return "默认设为重要，不强制日期。输入今天、明天或时间会自动识别。";
+  if (quadrant === "urgent") return `默认安排到 ${today}，优先级保持普通。输入具体时间会自动识别。`;
+  return "默认设为低优先级，不强制日期。输入时间时仍会自动识别。";
 }
 
 function isUrgentItem(item: MemoItem): boolean {

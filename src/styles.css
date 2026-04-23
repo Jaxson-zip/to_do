@@ -896,7 +896,7 @@ svg {
   border-bottom: 1px solid var(--line);
 }
 
-.matrix-column header div {
+.matrix-heading {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -922,6 +922,35 @@ svg {
   color: #777;
   font-size: 12px;
   font-style: normal;
+}
+
+.matrix-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.matrix-add-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.matrix-add-button:hover {
+  border-color: #b8c9ff;
+  background: #fff;
+}
+
+.matrix-add-button svg {
+  width: 15px;
+  height: 15px;
 }
 
 .matrix-column.urgentImportant header {
