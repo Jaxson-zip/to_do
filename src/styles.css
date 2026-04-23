@@ -421,6 +421,44 @@ svg {
   line-height: 1.5;
 }
 
+.tag-empty-state {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: center;
+  margin: 6px 4px 2px;
+  padding: 9px 8px;
+  border: 1px dashed #dddddd;
+  border-radius: 7px;
+  background: #fbfbfb;
+  color: #999;
+}
+
+.tag-empty-state span {
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #f1f4ff;
+  color: #5b8def;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tag-empty-state strong {
+  color: #8a8a8a;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tag-empty-state em {
+  color: #b4b4b4;
+  font-size: 11px;
+  font-style: normal;
+}
+
 .sidebar-bottom {
   margin-top: auto;
 }

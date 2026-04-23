@@ -327,7 +327,8 @@ export default function App() {
   function addItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsedInput = parseTaskInput(draft.title);
-    const title = parsedInput.title;
+    const taggedTitle = splitInlineTags(parsedInput.title);
+    const title = taggedTitle.title;
     if (!title) return;
 
     const createdAt = nowIso();
@@ -342,7 +343,7 @@ export default function App() {
       repeatRule: draft.kind === "task" ? draft.repeatRule : "none",
       dueDate: draft.kind === "task" ? draft.dueDate ?? parsedInput.dueDate : null,
       reminderAt: draft.kind === "task" ? draft.reminderAt ?? parsedInput.reminderAt : null,
-      tags: parseTags(draft.tags),
+      tags: mergeTags(taggedTitle.tags, parseTags(draft.tags)),
       pinned: false,
       archived: false,
       deletedAt: null,
@@ -368,13 +369,14 @@ export default function App() {
     const parsedInput = parseTaskInput(calendarDraftTitle, new Date(`${calendarDraftDate}T09:00:00`), {
       rollPastTime: false,
     });
-    if (!parsedInput.title) return;
+    const taggedTitle = splitInlineTags(parsedInput.title);
+    if (!taggedTitle.title) return;
 
     const createdAt = nowIso();
     const item: MemoItem = {
       id: createId(),
       listId: selectedListId,
-      title: parsedInput.title,
+      title: taggedTitle.title,
       body: "",
       kind: "task",
       status: "open",
@@ -382,7 +384,7 @@ export default function App() {
       repeatRule: "none",
       dueDate: parsedInput.dueDate ?? calendarDraftDate,
       reminderAt: parsedInput.reminderAt,
-      tags: [],
+      tags: taggedTitle.tags,
       pinned: false,
       archived: false,
       deletedAt: null,
@@ -415,13 +417,14 @@ export default function App() {
     const defaults = matrixDraftDefaults(matrixDraftQuadrant);
     const baseDate = new Date(`${defaults.dueDate ?? getToday()}T09:00:00`);
     const parsedInput = parseTaskInput(matrixDraftTitle, baseDate);
-    if (!parsedInput.title) return;
+    const taggedTitle = splitInlineTags(parsedInput.title);
+    if (!taggedTitle.title) return;
 
     const createdAt = nowIso();
     const item: MemoItem = {
       id: createId(),
       listId: selectedListId ?? defaultListId,
-      title: parsedInput.title,
+      title: taggedTitle.title,
       body: "",
       kind: "task",
       status: "open",
@@ -429,7 +432,7 @@ export default function App() {
       repeatRule: "none",
       dueDate: parsedInput.dueDate ?? defaults.dueDate,
       reminderAt: parsedInput.reminderAt,
-      tags: [],
+      tags: taggedTitle.tags,
       pinned: false,
       archived: false,
       deletedAt: null,
@@ -1100,7 +1103,11 @@ export default function App() {
             </button>
           </div>
           {tagStats.length === 0 ? (
-            <p className="sidebar-placeholder">暂无标签</p>
+            <div className="tag-empty-state">
+              <span>#</span>
+              <strong>暂无标签</strong>
+              <em>输入 #标签 后显示</em>
+            </div>
           ) : (
             tagStats.slice(0, 8).map((tag) => (
               <button
@@ -3839,6 +3846,23 @@ function parseTags(value: string): string[] {
         .filter(Boolean)
     )
   ).slice(0, 8);
+}
+
+function splitInlineTags(value: string): { title: string; tags: string[] } {
+  const tags: string[] = [];
+  const title = value
+    .replace(/(^|\s)#([^\s#，,、]+)/g, (_match, leading: string, tag: string) => {
+      tags.push(tag);
+      return leading;
+    })
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return { title, tags: parseTags(tags.join(" ")) };
+}
+
+function mergeTags(...groups: string[][]): string[] {
+  return Array.from(new Set(groups.flat())).slice(0, 8);
 }
 
 function formatMonthTitle(value: string): string {
