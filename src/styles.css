@@ -887,6 +887,11 @@ svg {
   overflow: hidden;
 }
 
+.matrix-column.drag-over {
+  border-color: #7da2ff;
+  box-shadow: inset 0 0 0 2px rgba(72, 115, 223, 0.18);
+}
+
 .matrix-column header {
   display: flex;
   align-items: center;
@@ -994,14 +999,21 @@ svg {
   border: 1px solid var(--line);
   border-radius: 7px;
   background: #fff;
+  cursor: grab;
 }
 
 .matrix-card:hover {
   background: #fafafa;
 }
 
+.matrix-card.dragging {
+  opacity: 0.48;
+  cursor: grabbing;
+}
+
 .matrix-card .checkbox {
   margin-top: 2px;
+  cursor: pointer;
 }
 
 .matrix-card-main {

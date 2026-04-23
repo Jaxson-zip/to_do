@@ -15,8 +15,6 @@ export function parseTaskInput(
   const raw = rawTitle.trim();
   if (!raw) return { title: "", dueDate: null, reminderAt: null };
 
-  if (hasDanglingTimeSeparator(raw)) return { title: raw, dueDate: null, reminderAt: null };
-
   const quick = parseChineseQuickTime(raw, baseDate, options.rollPastTime ?? true);
   if (quick) return quick;
 
@@ -45,7 +43,7 @@ function parseChineseQuickTime(
     "(?:(今天|今晚|明天|明晚|后天|大后天|周[一二三四五六日天1-7]|星期[一二三四五六日天1-7]|礼拜[一二三四五六日天1-7])\\s*)?";
   const timePrefix = "(凌晨|早上|上午|中午|下午|晚上|今晚|傍晚|夜里|明晚)?\\s*";
   const timeConnector = "(?:上|的|在)?\\s*";
-  const timeCore = "(\\d{1,2})(?:[:：.．点](\\d{1,2})|点半|半)?";
+  const timeCore = "(\\d{1,2})(?:(?:[:：.．](\\d{1,2}))|点半|点|半|(?:[:：.．](?=\\D|$)))?";
   const match = raw.match(new RegExp(`^\\s*${datePrefix}${timePrefix}${timeConnector}${timeCore}`));
   if (!match) return null;
 
@@ -58,7 +56,7 @@ function parseChineseQuickTime(
   const hour = Number(hourText);
   if (!Number.isInteger(hour) || hour < 0 || hour > 23) return null;
 
-  const minute = match[0].includes("点半") ? 30 : minuteText ? Number(minuteText) : 0;
+  const minute = match[0].includes("半") ? 30 : minuteText ? Number(minuteText) : 0;
   if (!Number.isInteger(minute) || minute < 0 || minute > 59) return null;
 
   const date = dateFromWord(dateWord || periodWord || "", baseDate);
@@ -74,12 +72,6 @@ function parseChineseQuickTime(
     dueDate: toDateKey(date),
     reminderAt: date.toISOString(),
   };
-}
-
-function hasDanglingTimeSeparator(raw: string): boolean {
-  const temporalPrefix =
-    "(?:(?:今天|今晚|明天|明晚|后天|大后天|周[一二三四五六日天1-7]|星期[一二三四五六日天1-7]|礼拜[一二三四五六日天1-7])\\s*)?(?:(?:凌晨|早上|上午|中午|下午|晚上|今晚|傍晚|夜里|明晚)\\s*)?(?:上|的|在)?\\s*";
-  return new RegExp(`^\\s*${temporalPrefix}\\d{1,2}[:：.．](?!\\d)`).test(raw);
 }
 
 function isClearlyTemporalResult(text: string): boolean {

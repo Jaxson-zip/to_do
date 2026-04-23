@@ -1,4 +1,4 @@
-import { type FormEvent, type MouseEvent, type ReactElement, useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent, type FormEvent, type MouseEvent, type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
   createId,
@@ -440,6 +440,11 @@ export default function App() {
     updateItems((current) => [item, ...current]);
     showNotice(`已添加到${matrixQuadrantTitle(matrixDraftQuadrant)}`);
     closeMatrixAdd();
+  }
+
+  function moveMatrixItem(id: string, quadrant: MatrixQuadrant) {
+    patchItem(id, matrixPatchForQuadrant(quadrant));
+    showNotice(`已移动到${matrixQuadrantTitle(quadrant)}`);
   }
 
   function patchItem(id: string, patch: Partial<MemoItem>) {
@@ -1313,6 +1318,7 @@ export default function App() {
           <MatrixView
             groups={matrixGroups}
             onCreateItem={openMatrixAdd}
+            onMoveItem={moveMatrixItem}
             patchItem={patchItem}
             setSelectedId={(id) => {
               setActivePanel("tasks");
@@ -2346,18 +2352,45 @@ function TaskListView({
 function MatrixView({
   groups,
   onCreateItem,
+  onMoveItem,
   patchItem,
   setSelectedId,
 }: {
   groups: Record<MatrixQuadrant, MemoItem[]>;
   onCreateItem: (quadrant: MatrixQuadrant) => void;
+  onMoveItem: (id: string, quadrant: MatrixQuadrant) => void;
   patchItem: (id: string, patch: Partial<MemoItem>) => void;
   setSelectedId: (id: string) => void;
 }) {
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<MatrixQuadrant | null>(null);
+
+  function handleDrop(event: DragEvent<HTMLElement>, quadrant: MatrixQuadrant) {
+    event.preventDefault();
+    const itemId = event.dataTransfer.getData("text/plain") || draggedItemId;
+    setDraggedItemId(null);
+    setDropTarget(null);
+    if (!itemId) return;
+    onMoveItem(itemId, quadrant);
+  }
+
   return (
     <section className="matrix-view" aria-label="四象限">
       {matrixQuadrants.map((quadrant) => (
-        <div className={`matrix-column ${quadrant.id}`} key={quadrant.id}>
+        <div
+          className={`matrix-column ${quadrant.id}${dropTarget === quadrant.id ? " drag-over" : ""}`}
+          key={quadrant.id}
+          onDragOver={(event) => {
+            if (!draggedItemId) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            setDropTarget(quadrant.id);
+          }}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(null);
+          }}
+          onDrop={(event) => handleDrop(event, quadrant.id)}
+        >
           <header>
             <div className="matrix-heading">
               <strong>{quadrant.title}</strong>
@@ -2381,7 +2414,20 @@ function MatrixView({
               <p>暂无任务</p>
             ) : (
               groups[quadrant.id].map((item) => (
-                <article className="matrix-card" key={item.id}>
+                <article
+                  className={draggedItemId === item.id ? "matrix-card dragging" : "matrix-card"}
+                  key={item.id}
+                  draggable
+                  onDragStart={(event) => {
+                    setDraggedItemId(item.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", item.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedItemId(null);
+                    setDropTarget(null);
+                  }}
+                >
                   <button
                     className="checkbox"
                     type="button"
@@ -3469,6 +3515,16 @@ function matrixDraftDefaults(quadrant: MatrixQuadrant): { priority: Priority; du
   if (quadrant === "important") return { priority: "high", dueDate: null };
   if (quadrant === "urgent") return { priority: "normal", dueDate: getToday() };
   return { priority: "low", dueDate: null };
+}
+
+function matrixPatchForQuadrant(quadrant: MatrixQuadrant): Partial<MemoItem> {
+  const defaults = matrixDraftDefaults(quadrant);
+  return {
+    priority: defaults.priority,
+    dueDate: defaults.dueDate,
+    reminderAt: null,
+    pinned: false,
+  };
 }
 
 function matrixQuadrantTitle(quadrant: MatrixQuadrant): string {
