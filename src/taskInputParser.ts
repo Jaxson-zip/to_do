@@ -15,12 +15,15 @@ export function parseTaskInput(
   const raw = rawTitle.trim();
   if (!raw) return { title: "", dueDate: null, reminderAt: null };
 
+  if (hasDanglingTimeSeparator(raw)) return { title: raw, dueDate: null, reminderAt: null };
+
   const quick = parseChineseQuickTime(raw, baseDate, options.rollPastTime ?? true);
   if (quick) return quick;
 
   const results = chrono.zh.hans.casual.parse(raw, baseDate);
   const first = results[0];
   if (!first) return { title: raw, dueDate: null, reminderAt: null };
+  if (!isClearlyTemporalResult(first.text)) return { title: raw, dueDate: null, reminderAt: null };
 
   const parsedDate = first.start.date();
   const title = cleanupParsedTitle(raw.slice(0, first.index) + raw.slice(first.index + first.text.length));
@@ -71,6 +74,18 @@ function parseChineseQuickTime(
     dueDate: toDateKey(date),
     reminderAt: date.toISOString(),
   };
+}
+
+function hasDanglingTimeSeparator(raw: string): boolean {
+  const temporalPrefix =
+    "(?:(?:今天|今晚|明天|明晚|后天|大后天|周[一二三四五六日天1-7]|星期[一二三四五六日天1-7]|礼拜[一二三四五六日天1-7])\\s*)?(?:(?:凌晨|早上|上午|中午|下午|晚上|今晚|傍晚|夜里|明晚)\\s*)?(?:上|的|在)?\\s*";
+  return new RegExp(`^\\s*${temporalPrefix}\\d{1,2}[:：.．](?!\\d)`).test(raw);
+}
+
+function isClearlyTemporalResult(text: string): boolean {
+  return /(\d|今天|今晚|明天|明晚|后天|大后天|周[一二三四五六日天1-7]|星期[一二三四五六日天1-7]|礼拜[一二三四五六日天1-7]|凌晨|早上|上午|中午|下午|晚上|傍晚|夜里|点|半|号|月)/.test(
+    text
+  );
 }
 
 function dateFromWord(word: string, baseDate: Date): Date {
