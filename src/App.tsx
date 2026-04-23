@@ -102,6 +102,7 @@ export default function App() {
   const [sortMode, setSortMode] = useState<SortMode>("smart");
   const [moreOpen, setMoreOpen] = useState(false);
   const [addExpanded, setAddExpanded] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [undoItem, setUndoItem] = useState<MemoItem | null>(null);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [focusMinutes, setFocusMinutes] = useState(initialFocusSettings.focusMinutes);
@@ -595,7 +596,8 @@ export default function App() {
     setSyncError(null);
 
     try {
-      await signInWithPassword(cleanEmail, password);
+      const nextSession = await signInWithPassword(cleanEmail, password);
+      setSession(nextSession ?? (await getSession()));
       setAuthMessage("登录成功，正在同步。");
     } catch (error) {
       setAuthMessage("");
@@ -612,8 +614,17 @@ export default function App() {
     setSyncError(null);
 
     try {
-      await signUpWithPassword(cleanEmail, password);
-      setAuthMessage("注册成功，正在同步。");
+      const nextSession = await signUpWithPassword(cleanEmail, password);
+      let currentSession = nextSession ?? (await getSession());
+      if (!currentSession) {
+        try {
+          currentSession = await signInWithPassword(cleanEmail, password);
+        } catch {
+          currentSession = null;
+        }
+      }
+      setSession(currentSession);
+      setAuthMessage(currentSession ? "注册成功，正在同步。" : "注册成功，但还未登录。请在 Supabase 关闭 Confirm email 后重新注册或登录。");
     } catch (error) {
       setAuthMessage("");
       setSyncError(errorMessage(error, "注册失败"));
@@ -883,7 +894,13 @@ export default function App() {
       <section className="task-pane">
         <header className="task-header">
           <div className="title-group">
-            <button className="header-icon" type="button" aria-label="折叠菜单">
+            <button
+              className="header-icon"
+              type="button"
+              aria-label="打开菜单"
+              aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen(true)}
+            >
               <Icon name="menu" />
             </button>
             <h1>
@@ -1212,6 +1229,116 @@ export default function App() {
           />
         )}
       </aside>
+
+      {mobileMenuOpen && (
+        <div className="mobile-drawer-layer" role="presentation" onClick={() => setMobileMenuOpen(false)}>
+          <aside className="mobile-drawer" aria-label="移动菜单" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <strong>菜单</strong>
+              <button type="button" aria-label="关闭菜单" onClick={() => setMobileMenuOpen(false)}>
+                <Icon name="x" />
+              </button>
+            </header>
+
+            <nav className="mobile-drawer-section" aria-label="快捷视图">
+              {primaryViews.map((item) => (
+                <button
+                  key={item.id}
+                  className={view === item.id && !selectedListId && !query ? "active" : ""}
+                  type="button"
+                  onClick={() => {
+                    selectView(item.id);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <Icon name={item.icon} />
+                  <span>{item.label}</span>
+                  <strong>{countForView(item.id, counts)}</strong>
+                </button>
+              ))}
+            </nav>
+
+            <section className="mobile-drawer-section">
+              <div className="mobile-drawer-title">
+                <span>清单</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    createList();
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  +
+                </button>
+              </div>
+              {activeLists.map((list) => (
+                <button
+                  key={list.id}
+                  className={selectedListId === list.id ? "active" : ""}
+                  type="button"
+                  onClick={() => {
+                    selectList(list.id);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <span>{list.emoji}</span>
+                  <span>{list.name}</span>
+                  <strong>{countByList(items, list.id)}</strong>
+                </button>
+              ))}
+            </section>
+
+            {tagStats.length > 0 && (
+              <section className="mobile-drawer-section">
+                <div className="mobile-drawer-title">
+                  <span>标签</span>
+                </div>
+                {tagStats.slice(0, 8).map((tag) => (
+                  <button
+                    key={tag.name}
+                    className={selectedTag === tag.name ? "active" : ""}
+                    type="button"
+                    onClick={() => {
+                      selectTag(tag.name);
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    <span>#{tag.name}</span>
+                    <strong>{tag.count}</strong>
+                  </button>
+                ))}
+              </section>
+            )}
+
+            <section className="mobile-drawer-section">
+              <div className="mobile-drawer-title">
+                <span>过滤器</span>
+              </div>
+              {(["pinned", "notes", "done", "archive"] as ViewFilter[]).map((filter) => (
+                <button
+                  key={filter}
+                  className={view === filter ? "active" : ""}
+                  type="button"
+                  onClick={() => {
+                    selectView(filter);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <Icon name={filter === "pinned" ? "pin" : filter === "notes" ? "note" : filter === "done" ? "circleCheck" : "trash"} />
+                  <span>{viewTitle(filter)}</span>
+                  <strong>
+                    {filter === "archive"
+                      ? counts.archived
+                      : filter === "done"
+                        ? counts.done
+                        : countForView(filter, counts)}
+                  </strong>
+                </button>
+              ))}
+            </section>
+          </aside>
+        </div>
+      )}
 
       <button
         className={activePanel === "sync" ? "mobile-floating-sync active" : "mobile-floating-sync"}

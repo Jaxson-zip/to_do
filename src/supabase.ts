@@ -59,22 +59,24 @@ export function onAuthChange(callback: (session: Session | null) => void): () =>
   return () => data.subscription.unsubscribe();
 }
 
-export async function signInWithPassword(email: string, password: string): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.auth.signInWithPassword({
+export async function signInWithPassword(email: string, password: string): Promise<Session | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
   if (error) throw error;
+  return data.session;
 }
 
-export async function signUpWithPassword(email: string, password: string): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.auth.signUp({
+export async function signUpWithPassword(email: string, password: string): Promise<Session | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
   });
   if (error) throw error;
+  return data.session;
 }
 
 export async function signOut(): Promise<void> {

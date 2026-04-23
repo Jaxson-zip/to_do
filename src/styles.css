@@ -110,6 +110,10 @@ svg {
   display: none;
 }
 
+.mobile-drawer-layer {
+  display: none;
+}
+
 .icon-rail {
   display: flex;
   flex-direction: column;
@@ -2467,6 +2471,111 @@ svg {
     width: 17px;
     height: 17px;
     stroke-width: 2.2;
+  }
+
+  .mobile-drawer-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    display: block;
+    background: rgba(0, 0, 0, 0.22);
+  }
+
+  .mobile-drawer {
+    display: grid;
+    align-content: start;
+    gap: 16px;
+    width: min(82vw, 330px);
+    height: 100%;
+    padding: max(18px, env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom));
+    background: #fff;
+    box-shadow: 18px 0 42px rgba(0, 0, 0, 0.16);
+    overflow: auto;
+  }
+
+  .mobile-drawer header,
+  .mobile-drawer-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .mobile-drawer header strong {
+    color: #222;
+    font-size: 18px;
+  }
+
+  .mobile-drawer header button,
+  .mobile-drawer-title button {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #fff;
+    color: #666;
+  }
+
+  .mobile-drawer header svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .mobile-drawer-section {
+    display: grid;
+    gap: 4px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mobile-drawer-section:last-child {
+    border-bottom: 0;
+  }
+
+  .mobile-drawer-title {
+    min-height: 30px;
+    padding: 0 4px;
+    color: #888;
+    font-size: 13px;
+  }
+
+  .mobile-drawer-section > button {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #222;
+    text-align: left;
+  }
+
+  .mobile-drawer-section > button.active {
+    background: #eef3ff;
+    color: var(--blue);
+  }
+
+  .mobile-drawer-section > button span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-drawer-section > button strong {
+    color: #9a9a9a;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .mobile-drawer-section svg {
+    width: 17px;
+    height: 17px;
   }
 
   .mobile-tabbar button {
