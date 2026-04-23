@@ -1823,7 +1823,7 @@ svg {
   place-items: center;
   width: 16px;
   height: 16px;
-  margin-left: 8px;
+  margin-left: 6px;
   border: 1px solid #bdbdbd;
   border-radius: 4px;
   background: #fff;
@@ -1847,11 +1847,15 @@ svg {
 }
 
 .checkbox.done::after {
+  position: absolute;
+  top: 45%;
+  left: 50%;
   width: 5px;
   height: 8px;
   border: solid #fff;
   border-width: 0 2px 2px 0;
-  transform: translateY(-1px) rotate(45deg);
+  transform: translate(-50%, -50%) rotate(45deg);
+  transform-origin: center;
   content: "";
 }
 
@@ -3065,7 +3069,7 @@ svg {
   }
 
   .checkbox {
-    margin-left: 2px;
+    margin-left: 3px;
   }
 
   .task-row {

@@ -3429,7 +3429,7 @@ function getCounts(items: MemoItem[]) {
       const date = item.dueDate ?? item.reminderAt?.slice(0, 10);
       return Boolean(date && date <= weekEnd);
     }).length,
-    pinned: open.filter((item) => item.pinned).length,
+    pinned: active.filter((item) => item.pinned).length,
     notes: active.filter((item) => item.kind === "note").length,
     done: active.filter((item) => item.status === "done").length,
     archived: items.filter((item) => item.archived || item.deletedAt).length,
