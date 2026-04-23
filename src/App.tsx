@@ -418,7 +418,11 @@ export default function App() {
     setCreatingList(true);
     setEditingListId(null);
     setNewListName("");
-    window.setTimeout(() => document.getElementById("new-list-name")?.focus(), 0);
+    window.setTimeout(() => {
+      const input =
+        document.getElementById("new-list-name") ?? document.getElementById("mobile-new-list-name");
+      input?.focus();
+    }, 0);
   }
 
   function commitCreateList() {
@@ -817,7 +821,7 @@ export default function App() {
 
         <div className="sidebar-section">
           <div className="section-title">
-            <span>标签</span>
+            <span>标签筛选</span>
           </div>
           {tagStats.length === 0 ? (
             <p className="sidebar-placeholder">暂无标签</p>
@@ -1265,12 +1269,41 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     createList();
-                    setMobileMenuOpen(false);
                   }}
                 >
                   +
                 </button>
               </div>
+              {creatingList && (
+                <form
+                  className="new-list-row mobile-new-list-row"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    commitCreateList();
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <span>{nextListEmoji(lists.length)}</span>
+                  <input
+                    id="mobile-new-list-name"
+                    value={newListName}
+                    onChange={(event) => setNewListName(event.target.value)}
+                    onBlur={() => {
+                      if (!newListName.trim()) setCreatingList(false);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        setCreatingList(false);
+                        setNewListName("");
+                      }
+                    }}
+                    placeholder="新清单名称"
+                  />
+                  <button type="submit" aria-label="创建清单">
+                    <Icon name="check" />
+                  </button>
+                </form>
+              )}
               {activeLists.map((list) => (
                 <button
                   key={list.id}
@@ -1291,7 +1324,7 @@ export default function App() {
             {tagStats.length > 0 && (
               <section className="mobile-drawer-section">
                 <div className="mobile-drawer-title">
-                  <span>标签</span>
+                  <span>标签筛选</span>
                 </div>
                 {tagStats.slice(0, 8).map((tag) => (
                   <button
