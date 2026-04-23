@@ -3,10 +3,12 @@ import type { Session } from "@supabase/supabase-js";
 import * as chrono from "chrono-node";
 import {
   createId,
+  loadAppSettings,
   loadFocusSettings,
   loadItems,
   loadLastSync,
   loadLists,
+  saveAppSettings,
   nowIso,
   saveFocusSettings,
   saveItems,
@@ -80,6 +82,7 @@ const demoItemTitles = new Set([
 
 export default function App() {
   const initialFocusSettings = useMemo(() => loadFocusSettings(), []);
+  const initialAppSettings = useMemo(() => loadAppSettings(), []);
   const [lists, setLists] = useState<MemoList[]>(() => initialLists());
   const [items, setItems] = useState<MemoItem[]>(() => initialItems());
   const [draft, setDraft] = useState<DraftItem>(emptyDraft);
@@ -120,6 +123,10 @@ export default function App() {
   const [editingTag, setEditingTag] = useState<string | null>(null);
   const [tagNameDraft, setTagNameDraft] = useState("");
   const [clearExamplesOpen, setClearExamplesOpen] = useState(false);
+  const [listManagerOpen, setListManagerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [defaultListId, setDefaultListId] = useState<string | null>(initialAppSettings.defaultListId);
+  const [hardDeleteListId, setHardDeleteListId] = useState<string | null>(null);
   const [undoItem, setUndoItem] = useState<MemoItem | null>(null);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [focusMinutes, setFocusMinutes] = useState(initialFocusSettings.focusMinutes);
@@ -150,6 +157,16 @@ export default function App() {
   useEffect(() => {
     saveFocusSettings({ focusMinutes, breakMinutes });
   }, [breakMinutes, focusMinutes]);
+
+  useEffect(() => {
+    saveAppSettings({ defaultListId });
+  }, [defaultListId]);
+
+  useEffect(() => {
+    if (defaultListId && !lists.some((list) => list.id === defaultListId && !list.archived)) {
+      setDefaultListId(null);
+    }
+  }, [defaultListId, lists]);
 
   useEffect(() => {
     sessionRef.current = session;
@@ -288,6 +305,10 @@ export default function App() {
     () => lists.find((list) => list.id === deleteListId) ?? null,
     [deleteListId, lists]
   );
+  const hardDeleteListTarget = useMemo(
+    () => lists.find((list) => list.id === hardDeleteListId) ?? null,
+    [hardDeleteListId, lists]
+  );
 
   function updateItems(updater: (current: MemoItem[]) => MemoItem[]) {
     setItems((current) => updater(current).sort(sortItems));
@@ -302,7 +323,7 @@ export default function App() {
     const createdAt = nowIso();
     const item: MemoItem = {
       id: createId(),
-      listId: draft.listId ?? selectedListId,
+      listId: draft.listId ?? selectedListId ?? defaultListId,
       title,
       body: draft.body.trim(),
       kind: draft.kind,
@@ -478,6 +499,7 @@ export default function App() {
   function openSyncPanel() {
     setMoreOpen(false);
     setCreatingList(false);
+    setSettingsOpen(false);
     setActivePanel("sync");
     setSelectedTag(null);
     setSelectedId(null);
@@ -497,6 +519,22 @@ export default function App() {
     setActivePanel("focus");
     setSelectedTag(null);
     setSelectedId(null);
+  }
+
+  function openListManager() {
+    setMoreOpen(false);
+    setMobileMenuOpen(false);
+    setSettingsOpen(false);
+    setTagManagerOpen(false);
+    setListManagerOpen(true);
+  }
+
+  function openSettings() {
+    setMoreOpen(false);
+    setMobileMenuOpen(false);
+    setListManagerOpen(false);
+    setTagManagerOpen(false);
+    setSettingsOpen(true);
   }
 
   function openTagManager() {
@@ -680,6 +718,77 @@ export default function App() {
     if (selectedListId === listId) selectView("inbox");
   }
 
+  function updateList(listId: string, patch: Partial<Pick<MemoList, "name" | "emoji">>) {
+    const updatedAt = nowIso();
+    setLists((current) =>
+      current.map((list) => {
+        if (list.id !== listId) return list;
+        const nextName = patch.name !== undefined ? patch.name.trimStart() : list.name;
+        const nextEmoji = patch.emoji !== undefined ? patch.emoji.trim().slice(0, 2) : list.emoji;
+        return {
+          ...list,
+          name: nextName,
+          emoji: nextEmoji || list.emoji,
+          updatedAt,
+        };
+      })
+    );
+  }
+
+  function createManagedList() {
+    const createdAt = nowIso();
+    const list: MemoList = {
+      id: createId(),
+      name: "新清单",
+      emoji: nextListEmoji(lists.length),
+      archived: false,
+      createdAt,
+      updatedAt: createdAt,
+    };
+
+    setLists((current) => [...current, list]);
+    setSelectedListId(list.id);
+    setView("inbox");
+    setActivePanel("tasks");
+    showNotice("已新增清单，可直接改名");
+  }
+
+  function moveList(listId: string, direction: -1 | 1) {
+    setLists((current) => {
+      const index = current.findIndex((list) => list.id === listId);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      const updatedAt = nowIso();
+      return next.map((list, nextIndex) =>
+        nextIndex === index || nextIndex === target ? { ...list, updatedAt } : list
+      );
+    });
+  }
+
+  function restoreList(listId: string) {
+    setLists((current) =>
+      current.map((list) => (list.id === listId ? { ...list, archived: false, updatedAt: nowIso() } : list))
+    );
+    showNotice("清单已恢复");
+  }
+
+  function confirmHardDeleteList() {
+    const listId = hardDeleteListId;
+    if (!listId) return;
+    const updatedAt = nowIso();
+
+    setLists((current) => current.filter((list) => list.id !== listId));
+    updateItems((current) =>
+      current.map((item) => (item.listId === listId ? { ...item, listId: null, updatedAt } : item))
+    );
+    if (selectedListId === listId) selectView("inbox");
+    if (defaultListId === listId) setDefaultListId(null);
+    setHardDeleteListId(null);
+    showNotice("清单已彻底删除，任务已移到收集箱");
+  }
+
   async function submitPasswordLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanEmail = email.trim();
@@ -832,9 +941,14 @@ export default function App() {
         <div className="sidebar-section">
           <div className="section-title">
             <span>清单</span>
-            <button type="button" aria-label="新增清单" onClick={createList}>
-              +
-            </button>
+            <span className="section-actions">
+              <button className="section-text-button" type="button" onClick={openListManager}>
+                管理
+              </button>
+              <button type="button" aria-label="新增清单" onClick={createList}>
+                +
+              </button>
+            </span>
           </div>
           {creatingList && (
             <form
@@ -1052,6 +1166,9 @@ export default function App() {
                   <button type="button" role="menuitem" onClick={createList}>
                     新增清单
                   </button>
+                  <button type="button" role="menuitem" onClick={openListManager}>
+                    管理清单
+                  </button>
                   <button type="button" role="menuitem" onClick={openSearch}>
                     搜索
                   </button>
@@ -1066,6 +1183,9 @@ export default function App() {
                   </button>
                   <button type="button" role="menuitem" onClick={openClearExamples}>
                     清除示例内容
+                  </button>
+                  <button type="button" role="menuitem" onClick={openSettings}>
+                    设置
                   </button>
                   <button type="button" role="menuitem" onClick={openSyncPanel}>
                     同步
@@ -1363,6 +1483,9 @@ export default function App() {
             <section className="mobile-drawer-section">
               <div className="mobile-drawer-title">
                 <span>清单</span>
+                <button type="button" onClick={openListManager}>
+                  管理
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -1475,10 +1598,20 @@ export default function App() {
               <div className="mobile-drawer-title">
                 <span>维护</span>
               </div>
+              <button type="button" onClick={openListManager}>
+                <Icon name="edit" />
+                <span>管理清单</span>
+                <strong>{lists.length}</strong>
+              </button>
               <button type="button" onClick={openTagManager}>
                 <Icon name="tag" />
                 <span>管理标签</span>
                 <strong>{tagStats.length}</strong>
+              </button>
+              <button type="button" onClick={openSettings}>
+                <Icon name="settings" />
+                <span>设置</span>
+                <strong />
               </button>
               <button type="button" onClick={openClearExamples}>
                 <Icon name="trash" />
@@ -1558,6 +1691,133 @@ export default function App() {
         </div>
       )}
 
+      {listManagerOpen && (
+        <div className="app-modal-backdrop" role="presentation" onMouseDown={() => setListManagerOpen(false)}>
+          <section className="app-modal list-manager-modal" aria-label="清单管理" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <strong>清单管理</strong>
+              <button type="button" aria-label="关闭" onClick={() => setListManagerOpen(false)}>
+                <Icon name="x" />
+              </button>
+            </header>
+            <p>可以调整清单顺序、改图标和名称。归档后的清单会隐藏，任务会保留。</p>
+            <div className="list-manager-list">
+              {lists.map((list, index) => (
+                <div className={list.archived ? "list-manager-row archived" : "list-manager-row"} key={list.id}>
+                  <input
+                    className="list-emoji-input"
+                    value={list.emoji}
+                    onChange={(event) => updateList(list.id, { emoji: event.target.value })}
+                    aria-label={`${list.name} 图标`}
+                  />
+                  <input
+                    value={list.name}
+                    onChange={(event) => updateList(list.id, { name: event.target.value })}
+                    onBlur={() => {
+                      if (!list.name.trim()) updateList(list.id, { name: "未命名清单" });
+                    }}
+                    aria-label={`${list.name} 名称`}
+                  />
+                  <strong>{countByList(items, list.id)}</strong>
+                  <span>{list.archived ? "已归档" : defaultListId === list.id ? "默认" : "启用"}</span>
+                  <div className="list-manager-actions">
+                    <button type="button" onClick={() => moveList(list.id, -1)} disabled={index === 0}>
+                      上移
+                    </button>
+                    <button type="button" onClick={() => moveList(list.id, 1)} disabled={index === lists.length - 1}>
+                      下移
+                    </button>
+                    {list.archived ? (
+                      <>
+                        <button type="button" onClick={() => restoreList(list.id)}>
+                          恢复
+                        </button>
+                        <button type="button" className="danger-text" onClick={() => setHardDeleteListId(list.id)}>
+                          彻底删除
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" onClick={() => archiveList(list.id)}>
+                        归档
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <footer>
+              <button type="button" onClick={createManagedList}>
+                新增清单
+              </button>
+              <button type="button" onClick={() => setListManagerOpen(false)}>
+                完成
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="app-modal-backdrop" role="presentation" onMouseDown={() => setSettingsOpen(false)}>
+          <section className="app-modal settings-modal" aria-label="设置" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <strong>设置</strong>
+              <button type="button" aria-label="关闭" onClick={() => setSettingsOpen(false)}>
+                <Icon name="x" />
+              </button>
+            </header>
+            <div className="settings-grid">
+              <label>
+                <span>默认清单</span>
+                <select value={defaultListId ?? ""} onChange={(event) => setDefaultListId(event.target.value || null)}>
+                  <option value="">跟随当前视图</option>
+                  {activeLists.map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.emoji} {list.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>专注时长</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={180}
+                  value={focusMinutes}
+                  onChange={(event) => setFocusDuration(Number(event.target.value))}
+                />
+              </label>
+              <label>
+                <span>休息时长</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={180}
+                  value={breakMinutes}
+                  onChange={(event) => setBreakDuration(Number(event.target.value))}
+                />
+              </label>
+              <div className="settings-account">
+                <span>同步账号</span>
+                <strong>{session?.user.email ?? "未登录"}</strong>
+                <button type="button" onClick={openSyncPanel}>
+                  打开同步
+                </button>
+              </div>
+            </div>
+            <footer>
+              <button type="button" onClick={() => void refreshApp()}>
+                更新应用
+              </button>
+              <button type="button" onClick={() => setSettingsOpen(false)}>
+                完成
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+
       {deleteListTarget && (
         <div className="app-modal-backdrop" role="presentation" onMouseDown={() => setDeleteListId(null)}>
           <section className="app-modal danger" aria-label="删除清单" onMouseDown={(event) => event.stopPropagation()}>
@@ -1576,6 +1836,28 @@ export default function App() {
               </button>
               <button type="button" onClick={confirmArchiveList}>
                 删除
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+
+      {hardDeleteListTarget && (
+        <div className="app-modal-backdrop" role="presentation" onMouseDown={() => setHardDeleteListId(null)}>
+          <section className="app-modal danger" aria-label="彻底删除清单" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <strong>彻底删除清单</strong>
+              <button type="button" aria-label="关闭" onClick={() => setHardDeleteListId(null)}>
+                <Icon name="x" />
+              </button>
+            </header>
+            <p>彻底删除「{hardDeleteListTarget.name}」，其中任务会移到收集箱。这个清单本身无法恢复。</p>
+            <footer>
+              <button type="button" onClick={() => setHardDeleteListId(null)}>
+                取消
+              </button>
+              <button type="button" onClick={confirmHardDeleteList}>
+                彻底删除
               </button>
             </footer>
           </section>
@@ -2810,6 +3092,7 @@ type IconName =
   | "pin"
   | "plus"
   | "search"
+  | "settings"
   | "sort"
   | "sync"
   | "tag"
@@ -2836,6 +3119,7 @@ function Icon({ name }: { name: IconName }) {
     pin: <path d="m14 4 6 6-4 1-4 6-2-2 6-4-1-4zM9 15l-5 5" />,
     plus: <path d="M12 5v14M5 12h14" />,
     search: <path d="M11 5a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm4.5 10.5L20 20" />,
+    settings: <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M17.7 6.3l-1.4 1.4M7.7 16.3l-1.4 1.4" />,
     sort: <path d="M8 6v12M5 9l3-3 3 3M16 18V6M13 15l3 3 3-3" />,
     sync: <path d="M20 7v5h-5M4 17v-5h5M18 9a7 7 0 0 0-11.7-2M6 15a7 7 0 0 0 11.7 2" />,
     tag: <path d="M4 11V5h6l9 9-6 6zM8 8h.01" />,

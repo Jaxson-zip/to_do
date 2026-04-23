@@ -4,10 +4,15 @@ const ITEMS_KEY = "todo-memo.items.v1";
 const LISTS_KEY = "todo-memo.lists.v1";
 const LAST_SYNC_KEY = "todo-memo.last-sync.v1";
 const FOCUS_SETTINGS_KEY = "todo-memo.focus-settings.v1";
+const APP_SETTINGS_KEY = "todo-memo.app-settings.v1";
 
 export type FocusSettings = {
   focusMinutes: number;
   breakMinutes: number;
+};
+
+export type AppSettings = {
+  defaultListId: string | null;
 };
 
 export function loadItems(): MemoItem[] {
@@ -70,6 +75,25 @@ export function loadFocusSettings(): FocusSettings {
 
 export function saveFocusSettings(settings: FocusSettings): void {
   localStorage.setItem(FOCUS_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+export function loadAppSettings(): AppSettings {
+  const fallback: AppSettings = { defaultListId: null };
+  const raw = localStorage.getItem(APP_SETTINGS_KEY);
+  if (!raw) return fallback;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    return {
+      defaultListId: typeof parsed.defaultListId === "string" ? parsed.defaultListId : null,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+export function saveAppSettings(settings: AppSettings): void {
+  localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(settings));
 }
 
 export function createId(): string {
