@@ -1,4 +1,5 @@
 import * as chrono from "chrono-node";
+import { getToday, toDateKey } from "./dateUtils";
 
 export type ParsedTaskInput = {
   title: string;
@@ -130,15 +131,4 @@ function normalizeHour(hour: number, period: string): number {
 
 function cleanupParsedTitle(value: string): string {
   return value.replace(/^[\s,.，。:：;；、-]+/, "").trim();
-}
-
-function getToday(): string {
-  const date = new Date();
-  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return offsetDate.toISOString().slice(0, 10);
-}
-
-function toDateKey(date: Date): string {
-  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return offsetDate.toISOString().slice(0, 10);
 }

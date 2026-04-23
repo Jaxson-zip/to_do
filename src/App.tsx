@@ -28,6 +28,7 @@ import {
 } from "./supabase";
 import type { DraftItem, MemoItem, MemoList, Priority, RepeatRule, ViewFilter } from "./types";
 import { parseTaskInput } from "./taskInputParser";
+import { addDays, getToday, monthKey, parseMonthKey, shiftMonth, shiftYear, toDateKey } from "./dateUtils";
 
 const emptyDraft: DraftItem = {
   title: "",
@@ -3656,44 +3657,6 @@ function parseTags(value: string): string[] {
         .filter(Boolean)
     )
   ).slice(0, 8);
-}
-
-function getToday(): string {
-  const date = new Date();
-  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return offsetDate.toISOString().slice(0, 10);
-}
-
-function addDays(dateValue: string, days: number): string {
-  const date = new Date(`${dateValue}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function toDateKey(date: Date): string {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
-}
-
-function monthKey(date: Date): string {
-  return toDateKey(new Date(date.getFullYear(), date.getMonth(), 1)).slice(0, 7);
-}
-
-function parseMonthKey(value: string): Date {
-  const [year, month] = value.split("-").map(Number);
-  return new Date(year, month - 1, 1);
-}
-
-function shiftMonth(value: string, offset: number): string {
-  const date = parseMonthKey(value);
-  date.setMonth(date.getMonth() + offset);
-  return monthKey(date);
-}
-
-function shiftYear(value: string, offset: number): string {
-  const date = parseMonthKey(value);
-  date.setFullYear(date.getFullYear() + offset);
-  return monthKey(date);
 }
 
 function formatMonthTitle(value: string): string {
