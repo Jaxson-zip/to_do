@@ -3111,7 +3111,7 @@ svg {
   }
 
   .task-row {
-    grid-template-columns: 22px 18px minmax(0, 1fr);
+    grid-template-columns: 28px minmax(0, 1fr);
     gap: 7px;
     min-height: 48px;
   }
