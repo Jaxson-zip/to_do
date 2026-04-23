@@ -826,7 +826,11 @@ export default function App() {
         }
       }
       setSession(currentSession);
-      setAuthMessage(currentSession ? "注册成功，正在同步。" : "注册成功，但还未登录。请在 Supabase 关闭 Confirm email 后重新注册或登录。");
+      setAuthMessage(
+        currentSession
+          ? "注册成功，正在同步。"
+          : "注册成功，但 Supabase 要求邮箱确认，所以还没有登录。按下面步骤关闭 Confirm email 后再点登录。"
+      );
     } catch (error) {
       setAuthMessage("");
       setSyncError(errorMessage(error, "注册失败"));
@@ -2010,6 +2014,7 @@ function SyncBox({
   refreshApp: () => Promise<void>;
 }) {
   const status = getSyncStatus(session, syncing, pendingSync, syncError, lastSyncedAt);
+  const showEmailConfirmHelp = isEmailConfirmIssue(authMessage) || isEmailConfirmIssue(syncError);
 
   return (
     <section className="sync-box" aria-label="同步">
@@ -2096,6 +2101,13 @@ function SyncBox({
 
       {authMessage && <p>{authMessage}</p>}
       {syncError && <p className="error-text">{syncError}</p>}
+      {showEmailConfirmHelp && (
+        <div className="auth-help">
+          <strong>需要改 Supabase 设置</strong>
+          <p>打开 Supabase 控制台：Authentication → Providers → Email。</p>
+          <p>关闭 Confirm email，点 Save。回到这里点“登录”；如果仍失败，再用同一邮箱点“注册”。</p>
+        </div>
+      )}
       {!session && (
         <button className="refresh-app-link" type="button" onClick={() => void refreshApp()}>
           看不到登录框？更新应用
@@ -3473,7 +3485,10 @@ function getSyncStatus(
 }
 
 function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message;
+  if (error instanceof Error && error.message) {
+    if (isEmailConfirmIssue(error.message)) return "邮箱还没确认。请关闭 Supabase 的 Confirm email 后再登录。";
+    return error.message;
+  }
   if (error && typeof error === "object") {
     const value = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
     const parts = [value.message, value.details, value.hint]
@@ -3481,11 +3496,19 @@ function errorMessage(error: unknown, fallback: string): string {
       .map((part) => part.trim());
     if (parts.length > 0) {
       const code = typeof value.code === "string" ? ` [${value.code}]` : "";
-      return `${parts.join(" ")}${code}`;
+      const message = `${parts.join(" ")}${code}`;
+      if (isEmailConfirmIssue(message)) return "邮箱还没确认。请关闭 Supabase 的 Confirm email 后再登录。";
+      return message;
     }
   }
   if (typeof error === "string" && error.trim()) return error.trim();
   return fallback;
+}
+
+function isEmailConfirmIssue(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const text = value.toLowerCase();
+  return text.includes("confirm email") || text.includes("email not confirmed") || text.includes("邮箱还没确认");
 }
 
 function syncSignature(items: MemoItem[], lists: MemoList[]): string {

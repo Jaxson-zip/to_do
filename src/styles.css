@@ -595,6 +595,25 @@ svg {
   color: var(--red);
 }
 
+.auth-help {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid #f0d5a8;
+  border-radius: 8px;
+  background: #fff8eb;
+  color: #7a5a22;
+}
+
+.auth-help strong {
+  color: #5f4316;
+  font-size: 12px;
+}
+
+.auth-help p {
+  color: #7a5a22;
+}
+
 .task-pane {
   min-width: 0;
   padding: 30px 22px 0;
