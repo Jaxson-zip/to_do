@@ -1242,10 +1242,7 @@ export default function App() {
             month={calendarMonth}
             viewMode={calendarViewMode}
             setViewMode={setCalendarViewMode}
-            setMonth={(nextMonth) => {
-              setCalendarMonth(nextMonth);
-              setSelectedCalendarDate(toDateKey(parseMonthKey(nextMonth)));
-            }}
+            setMonth={setCalendarMonth}
             selectedDate={selectedCalendarDate}
             onSelectDate={(dateKey) => {
               setSelectedCalendarDate(dateKey);
@@ -2564,7 +2561,15 @@ function MonthCalendar({
         <div className="calendar-toolbar">
           <CalendarViewSwitch viewMode={viewMode} setViewMode={setViewMode} />
           <div className="calendar-nav-buttons">
-            <button type="button" onClick={() => setMonth(shiftYear(month, -1))} aria-label="上一年">
+            <button
+              type="button"
+              onClick={() => {
+                const nextMonth = shiftYear(month, -1);
+                setMonth(nextMonth);
+                onSelectDate(toDateKey(parseMonthKey(nextMonth)));
+              }}
+              aria-label="上一年"
+            >
               ‹
             </button>
             <button
@@ -2577,7 +2582,15 @@ function MonthCalendar({
             >
               今年
             </button>
-            <button type="button" onClick={() => setMonth(shiftYear(month, 1))} aria-label="下一年">
+            <button
+              type="button"
+              onClick={() => {
+                const nextMonth = shiftYear(month, 1);
+                setMonth(nextMonth);
+                onSelectDate(toDateKey(parseMonthKey(nextMonth)));
+              }}
+              aria-label="下一年"
+            >
               ›
             </button>
           </div>
@@ -2619,7 +2632,15 @@ function MonthCalendar({
       <div className="calendar-toolbar">
         <CalendarViewSwitch viewMode={viewMode} setViewMode={setViewMode} />
         <div className="calendar-nav-buttons">
-          <button type="button" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="上个月">
+          <button
+            type="button"
+            onClick={() => {
+              const nextMonth = shiftMonth(month, -1);
+              setMonth(nextMonth);
+              onSelectDate(toDateKey(parseMonthKey(nextMonth)));
+            }}
+            aria-label="上个月"
+          >
             ‹
           </button>
           <button
@@ -2632,7 +2653,15 @@ function MonthCalendar({
           >
             今天
           </button>
-          <button type="button" onClick={() => setMonth(shiftMonth(month, 1))} aria-label="下个月">
+          <button
+            type="button"
+            onClick={() => {
+              const nextMonth = shiftMonth(month, 1);
+              setMonth(nextMonth);
+              onSelectDate(toDateKey(parseMonthKey(nextMonth)));
+            }}
+            aria-label="下个月"
+          >
             ›
           </button>
         </div>
