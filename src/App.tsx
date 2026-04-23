@@ -1894,21 +1894,21 @@ export default function App() {
                         }}
                       />
                     ) : (
-                      <button type="button" onClick={() => selectTag(tag.name)}>
+                      <button className="tag-name-button" type="button" onClick={() => selectTag(tag.name)}>
                         #{tag.name}
                       </button>
                     )}
                     <strong>{tag.count}</strong>
                     {editingTag === tag.name ? (
-                      <button type="button" onClick={() => commitRenameTag(tag.name)}>
+                      <button className="tag-action-button primary-tag-action" type="button" onClick={() => commitRenameTag(tag.name)}>
                         保存
                       </button>
                     ) : (
-                      <button type="button" onClick={() => beginRenameTag(tag.name)}>
+                      <button className="tag-action-button primary-tag-action" type="button" onClick={() => beginRenameTag(tag.name)}>
                         重命名
                       </button>
                     )}
-                    <button type="button" className="danger-text" onClick={() => deleteTag(tag.name)}>
+                    <button type="button" className="tag-action-button danger-tag-action danger-text" onClick={() => deleteTag(tag.name)}>
                       删除
                     </button>
                   </div>

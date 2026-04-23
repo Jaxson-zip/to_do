@@ -2401,7 +2401,7 @@ svg {
   background: #fafafa;
 }
 
-.tag-manager-row > button:first-child {
+.tag-manager-row .tag-name-button {
   overflow: hidden;
   border: 0;
   background: transparent;
@@ -2422,7 +2422,7 @@ svg {
   text-align: center;
 }
 
-.tag-manager-row > button:not(:first-child) {
+.tag-manager-row .tag-action-button {
   height: 30px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
@@ -3055,10 +3055,35 @@ svg {
   }
 
   .tag-manager-row {
-    grid-template-columns: minmax(0, 1fr) 32px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px;
   }
 
-  .tag-manager-row > button:not(:first-child) {
-    grid-column: auto;
+  .tag-manager-row .tag-name-button,
+  .tag-manager-row input {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  .tag-manager-row strong {
+    grid-column: 2;
+    min-width: 24px;
+  }
+
+  .tag-manager-row .tag-action-button {
+    grid-row: 2;
+    height: 34px;
+    min-width: 0;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+
+  .tag-manager-row .primary-tag-action {
+    grid-column: 1;
+  }
+
+  .tag-manager-row .danger-tag-action {
+    grid-column: 2;
   }
 }
