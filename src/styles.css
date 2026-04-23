@@ -1787,7 +1787,7 @@ svg {
 .task-row {
   position: relative;
   display: grid;
-  grid-template-columns: 28px 20px minmax(0, 1fr) 24px 24px;
+  grid-template-columns: 28px minmax(0, 1fr) 24px 24px;
   gap: 8px;
   align-items: center;
   min-height: 40px;
@@ -1818,6 +1818,7 @@ svg {
 }
 
 .checkbox {
+  position: relative;
   display: grid;
   place-items: center;
   width: 16px;
@@ -1841,14 +1842,30 @@ svg {
   color: #fff;
 }
 
+.checkbox.done svg {
+  display: none;
+}
+
+.checkbox.done::after {
+  width: 5px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: translateY(-1px) rotate(45deg);
+  content: "";
+}
+
 .task-emoji {
+  position: absolute;
+  top: 9px;
+  left: 0;
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
+  width: 4px;
+  height: 22px;
   color: transparent;
   font-size: 0;
+  pointer-events: none;
 }
 
 .task-emoji::before {
@@ -1858,27 +1875,28 @@ svg {
 
 .task-emoji.priority-high::before {
   width: 4px;
-  height: 14px;
+  height: 18px;
   border-radius: 999px;
   background: #e05252;
 }
 
 .task-emoji.priority-normal::before {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: #8f8f8f;
+  content: none;
 }
 
 .task-emoji.priority-low::before {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border: 1px solid #a7a7a7;
   border-radius: 2px;
   transform: rotate(45deg);
 }
 
 .task-emoji.note-marker {
+  top: 11px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
   color: #8f8f8f;
   font-size: 13px;
 }
@@ -1889,8 +1907,8 @@ svg {
 
 .task-emoji.feature-marker::before,
 .task-emoji.explore-marker::before {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 2px;
   background: #5b8def;
 }
@@ -1900,7 +1918,7 @@ svg {
 }
 
 .task-row.done .task-emoji {
-  opacity: 0.38;
+  display: none;
 }
 
 .task-copy {
