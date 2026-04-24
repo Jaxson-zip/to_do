@@ -174,12 +174,23 @@ export async function deleteItemsFromCloud(itemIds: string[], userId: string): P
   if (error) throw error;
 }
 
-function mergeItemsByNewest(localItems: MemoItem[], remoteItems: MemoItem[]): MemoItem[] {
+export function mergeItemsByNewest(localItems: MemoItem[], remoteItems: MemoItem[]): MemoItem[] {
   const map = new Map<string, MemoItem>();
 
   for (const item of [...remoteItems, ...localItems]) {
     const existing = map.get(item.id);
-    if (!existing || new Date(item.updatedAt).getTime() >= new Date(existing.updatedAt).getTime()) {
+    if (!existing) {
+      map.set(item.id, item);
+      continue;
+    }
+
+    if (existing.status === "purged" && item.status !== "purged") continue;
+    if (item.status === "purged" && existing.status !== "purged") {
+      map.set(item.id, item);
+      continue;
+    }
+
+    if (new Date(item.updatedAt).getTime() >= new Date(existing.updatedAt).getTime()) {
       map.set(item.id, item);
     }
   }
@@ -187,12 +198,23 @@ function mergeItemsByNewest(localItems: MemoItem[], remoteItems: MemoItem[]): Me
   return [...map.values()].sort(sortItems);
 }
 
-function mergeListsByNewest(localLists: MemoList[], remoteLists: MemoList[]): MemoList[] {
+export function mergeListsByNewest(localLists: MemoList[], remoteLists: MemoList[]): MemoList[] {
   const map = new Map<string, MemoList>();
 
   for (const list of [...remoteLists, ...localLists]) {
     const existing = map.get(list.id);
-    if (!existing || new Date(list.updatedAt).getTime() >= new Date(existing.updatedAt).getTime()) {
+    if (!existing) {
+      map.set(list.id, list);
+      continue;
+    }
+
+    if (existing.deletedAt && !list.deletedAt) continue;
+    if (list.deletedAt && !existing.deletedAt) {
+      map.set(list.id, list);
+      continue;
+    }
+
+    if (new Date(list.updatedAt).getTime() >= new Date(existing.updatedAt).getTime()) {
       map.set(list.id, list);
     }
   }
