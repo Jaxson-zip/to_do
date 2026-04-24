@@ -15,6 +15,7 @@ import {
   saveLists,
 } from "./storage";
 import {
+  deleteItemsFromCloud,
   deleteItemFromCloud,
   fetchCloudStats,
   getSession,
@@ -134,6 +135,7 @@ export default function App() {
   const [editingTag, setEditingTag] = useState<string | null>(null);
   const [tagNameDraft, setTagNameDraft] = useState("");
   const [clearExamplesOpen, setClearExamplesOpen] = useState(false);
+  const [clearTrashOpen, setClearTrashOpen] = useState(false);
   const [listManagerOpen, setListManagerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [defaultListId, setDefaultListId] = useState<string | null>(initialAppSettings.defaultListId);
@@ -683,6 +685,16 @@ export default function App() {
     setClearExamplesOpen(true);
   }
 
+  function openClearTrash() {
+    setMoreOpen(false);
+    setMobileMenuOpen(false);
+    if (counts.archived === 0) {
+      showNotice("垃圾桶已经是空的");
+      return;
+    }
+    setClearTrashOpen(true);
+  }
+
   function clearExampleContent() {
     const updatedAt = nowIso();
     const removedIds = new Set(items.filter(isDemoItem).map((item) => item.id));
@@ -696,6 +708,37 @@ export default function App() {
     if (selectedId && removedIds.has(selectedId)) setSelectedId(null);
     setClearExamplesOpen(false);
     showNotice(`已将 ${removedIds.size} 条示例内容移到垃圾桶`);
+  }
+
+  async function clearTrash() {
+    const trashIds = latestItemsRef.current.filter((item) => item.archived || item.deletedAt).map((item) => item.id);
+    if (trashIds.length === 0) {
+      setClearTrashOpen(false);
+      showNotice("垃圾桶已经是空的");
+      return;
+    }
+
+    const currentSession = sessionRef.current;
+    setSyncError(null);
+
+    if (currentSession?.user && isSupabaseConfigured) {
+      try {
+        await deleteItemsFromCloud(trashIds, currentSession.user.id);
+      } catch (error) {
+        setSyncError(errorMessage(error, "云端删除失败"));
+        showNotice("清空垃圾桶失败，请稍后重试");
+        return;
+      }
+    }
+
+    updateItems((current) => current.filter((item) => !(item.archived || item.deletedAt)));
+    setSelectedId((current) => (current && trashIds.includes(current) ? null : current));
+    setUndoItem((current) => (current && trashIds.includes(current.id) ? null : current));
+    setCloudStats((current) =>
+      current ? { ...current, items: Math.max(0, current.items - trashIds.length), fetchedAt: nowIso() } : current
+    );
+    setClearTrashOpen(false);
+    showNotice(`已清空垃圾桶，共删除 ${trashIds.length} 项`);
   }
 
   async function refreshApp() {
@@ -1249,6 +1292,12 @@ export default function App() {
                 <span>{sortModeLabel(sortMode)}</span>
               </button>
             )}
+            {view === "archive" && counts.archived > 0 && (
+              <button className="header-action" type="button" onClick={openClearTrash}>
+                <Icon name="trash" />
+                <span>清空</span>
+              </button>
+            )}
             <div className="more-anchor">
               <button
                 className={moreOpen ? "header-action active" : "header-action"}
@@ -1279,6 +1328,11 @@ export default function App() {
                   <button type="button" role="menuitem" onClick={openTagManager}>
                     管理标签
                   </button>
+                  {view === "archive" && counts.archived > 0 && (
+                    <button type="button" role="menuitem" onClick={openClearTrash}>
+                      清空垃圾桶
+                    </button>
+                  )}
                   <button type="button" role="menuitem" onClick={openClearExamples}>
                     清除示例内容
                   </button>
@@ -2076,6 +2130,28 @@ export default function App() {
               </button>
               <button type="button" onClick={clearExampleContent}>
                 清除
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+
+      {clearTrashOpen && (
+        <div className="app-modal-backdrop" role="presentation" onMouseDown={() => setClearTrashOpen(false)}>
+          <section className="app-modal danger" aria-label="清空垃圾桶" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <strong>清空垃圾桶</strong>
+              <button type="button" aria-label="关闭" onClick={() => setClearTrashOpen(false)}>
+                <Icon name="x" />
+              </button>
+            </header>
+            <p>将彻底删除垃圾桶里的 {counts.archived} 项内容，删除后无法恢复。</p>
+            <footer>
+              <button type="button" onClick={() => setClearTrashOpen(false)}>
+                取消
+              </button>
+              <button type="button" onClick={() => void clearTrash()}>
+                清空
               </button>
             </footer>
           </section>

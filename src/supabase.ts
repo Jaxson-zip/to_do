@@ -145,6 +145,12 @@ export async function deleteItemFromCloud(itemId: string, userId: string): Promi
   if (error) throw error;
 }
 
+export async function deleteItemsFromCloud(itemIds: string[], userId: string): Promise<void> {
+  if (!supabase || itemIds.length === 0) return;
+  const { error } = await supabase.from("memo_items").delete().eq("user_id", userId).in("id", itemIds);
+  if (error) throw error;
+}
+
 function mergeItemsByNewest(localItems: MemoItem[], remoteItems: MemoItem[]): MemoItem[] {
   const map = new Map<string, MemoItem>();
 
