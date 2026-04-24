@@ -1022,7 +1022,7 @@ export default function App() {
       setLastSyncedAt(syncedAt);
       setCloudStats({
         items: merged.items.filter((item) => item.status !== "purged").length,
-        lists: merged.lists.length,
+        lists: merged.lists.filter((list) => !list.deletedAt).length,
         fetchedAt: syncedAt,
       });
       saveLastSync(syncedAt);
