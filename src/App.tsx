@@ -849,7 +849,7 @@ export default function App() {
       current.map((item) => (item.listId === listId ? { ...item, listId: null, updatedAt } : item))
     );
     setDeleteListId(null);
-    if (selectedListId === listId) selectView("inbox");
+    selectView("inbox");
   }
 
   function updateList(listId: string, patch: Partial<Pick<MemoList, "name" | "emoji">>) {
@@ -930,7 +930,7 @@ export default function App() {
       updateItems((current) =>
         current.map((item) => (item.listId === listId ? { ...item, listId: null, updatedAt } : item))
       );
-      if (selectedListId === listId) selectView("inbox");
+      selectView("inbox");
       if (defaultListId === listId) setDefaultListId(null);
       setCloudStats((current) =>
         current ? { ...current, lists: Math.max(0, current.lists - 1), fetchedAt: nowIso() } : current
