@@ -150,6 +150,7 @@ export default function App() {
   const sessionRef = useRef(session);
   const syncingRef = useRef(false);
   const queuedSyncRef = useRef(false);
+  const inFlightSyncSignatureRef = useRef("");
   const lastSyncedSignatureRef = useRef("");
   const notifiedReminderRef = useRef<Set<string>>(new Set());
 
@@ -204,9 +205,17 @@ export default function App() {
 
   useEffect(() => {
     if (!session?.user || !isSupabaseConfigured) return;
-    if (!lastSyncedSignatureRef.current) return;
 
     const currentSignature = syncSignature(items, lists);
+    if (syncingRef.current) {
+      if (currentSignature !== inFlightSyncSignatureRef.current) {
+        queuedSyncRef.current = true;
+        setPendingSync(true);
+      }
+      return;
+    }
+
+    if (!lastSyncedSignatureRef.current) return;
     if (currentSignature === lastSyncedSignatureRef.current) return;
 
     setPendingSync(true);
@@ -989,11 +998,20 @@ export default function App() {
     }
 
     syncingRef.current = true;
+    const startedWithSignature = syncSignature(latestItemsRef.current, latestListsRef.current);
+    inFlightSyncSignatureRef.current = startedWithSignature;
     setSyncing(true);
     setSyncError(null);
 
     try {
       const merged = await syncWithCloud(latestItemsRef.current, latestListsRef.current, currentSession.user);
+      const changedDuringSync = syncSignature(latestItemsRef.current, latestListsRef.current) !== startedWithSignature;
+      if (changedDuringSync) {
+        queuedSyncRef.current = true;
+        setPendingSync(true);
+        return;
+      }
+
       const syncedAt = nowIso();
       latestItemsRef.current = merged.items;
       latestListsRef.current = merged.lists;
@@ -1012,6 +1030,7 @@ export default function App() {
       setSyncError(errorMessage(error, "同步失败"));
     } finally {
       syncingRef.current = false;
+      inFlightSyncSignatureRef.current = "";
       setSyncing(false);
       if (queuedSyncRef.current) {
         queuedSyncRef.current = false;
