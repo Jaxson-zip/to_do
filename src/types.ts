@@ -1,5 +1,5 @@
 export type ItemKind = "task" | "note";
-export type ItemStatus = "open" | "done";
+export type ItemStatus = "open" | "done" | "purged";
 export type Priority = "low" | "normal" | "high";
 export type RepeatRule = "none" | "daily" | "weekly" | "monthly";
 export type ViewFilter = "inbox" | "today" | "upcoming" | "pinned" | "notes" | "done" | "archive";

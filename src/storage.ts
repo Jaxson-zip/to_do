@@ -113,7 +113,7 @@ function normalizeMemoItem(value: unknown): MemoItem | null {
     typeof item.title === "string" &&
     typeof item.body === "string" &&
     (item.kind === "task" || item.kind === "note") &&
-    (item.status === "open" || item.status === "done") &&
+    (item.status === "open" || item.status === "done" || item.status === "purged") &&
     (item.priority === "low" || item.priority === "normal" || item.priority === "high") &&
     Array.isArray(item.tags) &&
     typeof item.pinned === "boolean" &&

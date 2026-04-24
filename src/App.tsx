@@ -15,8 +15,6 @@ import {
   saveLists,
 } from "./storage";
 import {
-  deleteItemsFromCloud,
-  deleteItemFromCloud,
   deleteListFromCloud,
   fetchCloudStats,
   getSession,
@@ -489,28 +487,14 @@ export default function App() {
   }
 
   function permanentlyDelete(id: string) {
-    void (async () => {
-      const currentSession = sessionRef.current;
-      setSyncError(null);
-
-      if (currentSession?.user && isSupabaseConfigured) {
-        try {
-          await deleteItemFromCloud(id, currentSession.user.id);
-        } catch (error) {
-          setSyncError(errorMessage(error, "云端删除失败"));
-          showNotice("彻底删除失败，请稍后重试");
-          return;
-        }
-      }
-
-      updateItems((current) => current.filter((item) => item.id !== id));
-      if (selectedId === id) setSelectedId(null);
-      setUndoItem((current) => (current?.id === id ? null : current));
-      setCloudStats((current) =>
-        current ? { ...current, items: Math.max(0, current.items - 1), fetchedAt: nowIso() } : current
-      );
-      showNotice("已彻底删除");
-    })();
+    const updatedAt = nowIso();
+    patchItem(id, { status: "purged", archived: false, deletedAt: updatedAt, updatedAt });
+    if (selectedId === id) setSelectedId(null);
+    setUndoItem((current) => (current?.id === id ? null : current));
+    setCloudStats((current) =>
+      current ? { ...current, items: Math.max(0, current.items - 1), fetchedAt: nowIso() } : current
+    );
+    showNotice("\u5DF2\u5F7B\u5E95\u5220\u9664");
   }
 
   function restoreDeletedItem() {
@@ -718,34 +702,30 @@ export default function App() {
   }
 
   async function clearTrash() {
-    const trashIds = latestItemsRef.current.filter((item) => item.archived || item.deletedAt).map((item) => item.id);
+    const trashIds = latestItemsRef.current
+      .filter((item) => (item.archived || item.deletedAt) && item.status !== "purged")
+      .map((item) => item.id);
     if (trashIds.length === 0) {
       setClearTrashOpen(false);
-      showNotice("垃圾桶已经是空的");
+      showNotice("\u5783\u573E\u6876\u5DF2\u7ECF\u662F\u7A7A\u7684");
       return;
     }
 
-    const currentSession = sessionRef.current;
-    setSyncError(null);
-
-    if (currentSession?.user && isSupabaseConfigured) {
-      try {
-        await deleteItemsFromCloud(trashIds, currentSession.user.id);
-      } catch (error) {
-        setSyncError(errorMessage(error, "云端删除失败"));
-        showNotice("清空垃圾桶失败，请稍后重试");
-        return;
-      }
-    }
-
-    updateItems((current) => current.filter((item) => !(item.archived || item.deletedAt)));
+    const updatedAt = nowIso();
+    updateItems((current) =>
+      current.map((item) =>
+        trashIds.includes(item.id)
+          ? { ...item, status: "purged", archived: false, deletedAt: updatedAt, updatedAt }
+          : item
+      )
+    );
     setSelectedId((current) => (current && trashIds.includes(current) ? null : current));
     setUndoItem((current) => (current && trashIds.includes(current.id) ? null : current));
     setCloudStats((current) =>
       current ? { ...current, items: Math.max(0, current.items - trashIds.length), fetchedAt: nowIso() } : current
     );
     setClearTrashOpen(false);
-    showNotice(`已清空垃圾桶，共删除 ${trashIds.length} 项`);
+    showNotice("\u5DF2\u6E05\u7A7A\u5783\u573E\u6876\uFF0C\u5171\u5220\u9664 " + trashIds.length + " \u9879");
   }
 
   async function refreshApp() {
@@ -1033,7 +1013,11 @@ export default function App() {
       setLists(merged.lists);
       setPendingSync(false);
       setLastSyncedAt(syncedAt);
-      setCloudStats({ items: merged.items.length, lists: merged.lists.length, fetchedAt: syncedAt });
+      setCloudStats({
+        items: merged.items.filter((item) => item.status !== "purged").length,
+        lists: merged.lists.length,
+        fetchedAt: syncedAt,
+      });
       saveLastSync(syncedAt);
     } catch (error) {
       setSyncError(errorMessage(error, "同步失败"));
@@ -3545,7 +3529,7 @@ function initialLists(): MemoList[] {
 }
 
 function getCounts(items: MemoItem[]) {
-  const active = items.filter((item) => !item.deletedAt && !item.archived);
+  const active = items.filter((item) => item.status !== "purged" && !item.deletedAt && !item.archived);
   const open = active.filter((item) => item.status === "open");
   const today = getToday();
   const weekEnd = addDays(today, 7);
@@ -3560,15 +3544,15 @@ function getCounts(items: MemoItem[]) {
     pinned: active.filter((item) => item.pinned).length,
     notes: active.filter((item) => item.kind === "note").length,
     done: active.filter((item) => item.status === "done").length,
-    archived: items.filter((item) => item.archived || item.deletedAt).length,
+    archived: items.filter((item) => item.status !== "purged" && (item.archived || item.deletedAt)).length,
   };
 }
 
 function getLocalSyncStats(items: MemoItem[], lists: MemoList[]): LocalSyncStats {
   return {
-    items: items.length,
-    openItems: items.filter((item) => !item.deletedAt && !item.archived && item.status === "open").length,
-    deletedItems: items.filter((item) => item.deletedAt).length,
+    items: items.filter((item) => item.status !== "purged").length,
+    openItems: items.filter((item) => item.status !== "purged" && !item.deletedAt && !item.archived && item.status === "open").length,
+    deletedItems: items.filter((item) => item.status !== "purged" && item.deletedAt).length,
     lists: lists.length,
     activeLists: lists.filter((list) => !list.archived).length,
   };
@@ -3698,6 +3682,7 @@ function filterItems(
 
   return items
     .filter((item) => {
+      if (item.status === "purged") return false;
       if (view === "archive") return Boolean(item.archived || item.deletedAt);
       if (item.archived || item.deletedAt) return false;
       if (view === "today") {

@@ -17,7 +17,7 @@ type RemoteMemoItem = {
   title: string;
   body: string;
   kind: "task" | "note";
-  status: "open" | "done";
+  status: "open" | "done" | "purged";
   priority: "low" | "normal" | "high";
   repeat_rule: "none" | "daily" | "weekly" | "monthly" | null;
   due_date: string | null;
@@ -125,7 +125,7 @@ export async function fetchCloudStats(user: User): Promise<CloudStats> {
   if (!supabase) return { items: 0, lists: 0, fetchedAt: new Date().toISOString() };
 
   const [{ count: itemCount, error: itemError }, { count: listCount, error: listError }] = await Promise.all([
-    supabase.from("memo_items").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+    supabase.from("memo_items").select("id", { count: "exact", head: true }).eq("user_id", user.id).neq("status", "purged"),
     supabase.from("memo_lists").select("id", { count: "exact", head: true }).eq("user_id", user.id),
   ]);
 
@@ -218,7 +218,7 @@ function itemFromRemote(item: RemoteMemoItem): MemoItem {
     title: item.title,
     body: item.body,
     kind: item.kind,
-    status: item.status,
+    status: item.status === "open" || item.status === "done" || item.status === "purged" ? item.status : "open",
     priority: item.priority,
     repeatRule:
       item.repeat_rule === "daily" || item.repeat_rule === "weekly" || item.repeat_rule === "monthly"
