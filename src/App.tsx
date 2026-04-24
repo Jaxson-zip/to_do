@@ -19,6 +19,7 @@ import {
   getSession,
   isSupabaseConfigured,
   onAuthChange,
+  purgeItemsInCloud,
   signInWithPassword,
   signOut,
   signUpWithPassword,
@@ -27,6 +28,13 @@ import {
   type CloudStats,
 } from "./supabase";
 import type { DraftItem, MemoItem, MemoList, Priority, RepeatRule, ViewFilter } from "./types";
+
+type SyncSnapshot = {
+  items: MemoItem[];
+  lists: MemoList[];
+  mutationVersion: number;
+  signature: string;
+};
 import { parseTaskInput } from "./taskInputParser";
 import { addDays, getToday, monthKey, parseMonthKey, shiftMonth, shiftYear, toDateKey } from "./dateUtils";
 
@@ -150,6 +158,8 @@ export default function App() {
   const sessionRef = useRef(session);
   const syncingRef = useRef(false);
   const queuedSyncRef = useRef(false);
+  const queuedSyncSnapshotRef = useRef<SyncSnapshot | null>(null);
+  const localMutationVersionRef = useRef(0);
   const inFlightSyncSignatureRef = useRef("");
   const lastSyncedSignatureRef = useRef("");
   const notifiedReminderRef = useRef<Set<string>>(new Set());
@@ -184,6 +194,7 @@ export default function App() {
       setCloudStats(null);
       setPendingSync(false);
       lastSyncedSignatureRef.current = "";
+      queuedSyncSnapshotRef.current = null;
     } else {
       setPassword("");
       setAuthMessage("");
@@ -207,9 +218,16 @@ export default function App() {
     if (!session?.user || !isSupabaseConfigured) return;
 
     const currentSignature = syncSignature(items, lists);
+    const scheduledSnapshot: SyncSnapshot = {
+      items,
+      lists,
+      mutationVersion: localMutationVersionRef.current,
+      signature: currentSignature,
+    };
     if (syncingRef.current) {
       if (currentSignature !== inFlightSyncSignatureRef.current) {
         queuedSyncRef.current = true;
+        queuedSyncSnapshotRef.current = scheduledSnapshot;
         setPendingSync(true);
       }
       return;
@@ -220,7 +238,7 @@ export default function App() {
 
     setPendingSync(true);
     const timer = window.setTimeout(() => {
-      void runSync();
+      void runSync(scheduledSnapshot);
     }, 1200);
 
     return () => window.clearTimeout(timer);
@@ -336,8 +354,18 @@ export default function App() {
     setDraft((current) => (current.listId === selectedListId ? { ...current, listId: null } : current));
   }, [activeLists, selectedListId]);
 
+  function markLocalMutation() {
+    localMutationVersionRef.current += 1;
+  }
+
   function updateItems(updater: (current: MemoItem[]) => MemoItem[]) {
+    markLocalMutation();
     setItems((current) => updater(current).sort(sortItems));
+  }
+
+  function updateLists(updater: (current: MemoList[]) => MemoList[]) {
+    markLocalMutation();
+    setLists((current) => updater(current));
   }
 
   function addItem(event: FormEvent<HTMLFormElement>) {
@@ -503,6 +531,7 @@ export default function App() {
       current ? { ...current, items: Math.max(0, current.items - 1), fetchedAt: nowIso() } : current
     );
     showNotice("\u5DF2\u5F7B\u5E95\u5220\u9664");
+    enforcePurgedItems([id], updatedAt);
   }
 
   function restoreDeletedItem() {
@@ -573,7 +602,7 @@ export default function App() {
       updatedAt: createdAt,
     };
 
-    setLists((current) => [...current, list]);
+    updateLists((current) => [...current, list]);
     setCreatingList(false);
     setNewListName("");
     selectList(list.id);
@@ -710,6 +739,41 @@ export default function App() {
     showNotice(`已将 ${removedIds.size} 条示例内容移到垃圾桶`);
   }
 
+  function enforcePurgedItems(itemIds: string[], updatedAt: string) {
+    const syncSnapshot: SyncSnapshot = {
+      items: latestItemsRef.current.map((item) =>
+        itemIds.includes(item.id) ? { ...item, status: "purged", archived: false, deletedAt: updatedAt, updatedAt } : item
+      ),
+      lists: latestListsRef.current,
+      mutationVersion: localMutationVersionRef.current,
+      signature: "",
+    };
+    syncSnapshot.signature = syncSignature(syncSnapshot.items, syncSnapshot.lists);
+
+    const persist = async () => {
+      const currentSession = sessionRef.current;
+      if (!currentSession?.user || !isSupabaseConfigured) return;
+
+      try {
+        await purgeItemsInCloud(itemIds, currentSession.user.id, updatedAt);
+      } catch (error) {
+        setSyncError(errorMessage(error, "彻底删除同步失败"));
+      }
+    };
+
+    void persist();
+    queuedSyncSnapshotRef.current = syncSnapshot;
+    queuedSyncRef.current = true;
+    window.setTimeout(() => {
+      void persist();
+      queuedSyncSnapshotRef.current = syncSnapshot;
+      queuedSyncRef.current = true;
+      if (!syncingRef.current) {
+        void runSync(syncSnapshot);
+      }
+    }, 3500);
+  }
+
   async function clearTrash() {
     const trashIds = latestItemsRef.current
       .filter((item) => (item.archived || item.deletedAt) && item.status !== "purged")
@@ -735,6 +799,7 @@ export default function App() {
     );
     setClearTrashOpen(false);
     showNotice("\u5DF2\u6E05\u7A7A\u5783\u573E\u6876\uFF0C\u5171\u5220\u9664 " + trashIds.length + " \u9879");
+    enforcePurgedItems(trashIds, updatedAt);
   }
 
   async function refreshApp() {
@@ -816,7 +881,7 @@ export default function App() {
     setEditingListId(null);
     if (!name) return;
 
-    setLists((current) =>
+    updateLists((current) =>
       current.map((list) => (list.id === listId ? { ...list, name, updatedAt: nowIso() } : list))
     );
   }
@@ -837,7 +902,7 @@ export default function App() {
     if (!listId) return;
 
     const updatedAt = nowIso();
-    setLists((current) =>
+    updateLists((current) =>
       current.map((item) => (item.id === listId ? { ...item, archived: true, updatedAt } : item))
     );
     updateItems((current) =>
@@ -849,7 +914,7 @@ export default function App() {
 
   function updateList(listId: string, patch: Partial<Pick<MemoList, "name" | "emoji">>) {
     const updatedAt = nowIso();
-    setLists((current) =>
+    updateLists((current) =>
       current.map((list) => {
         if (list.id !== listId) return list;
         const nextName = patch.name !== undefined ? patch.name.trimStart() : list.name;
@@ -876,7 +941,7 @@ export default function App() {
       updatedAt: createdAt,
     };
 
-    setLists((current) => [...current, list]);
+    updateLists((current) => [...current, list]);
     setSelectedListId(list.id);
     setView("inbox");
     setActivePanel("tasks");
@@ -884,7 +949,7 @@ export default function App() {
   }
 
   function moveList(listId: string, direction: -1 | 1) {
-    setLists((current) => {
+    updateLists((current) => {
       const index = current.findIndex((list) => list.id === listId);
       const target = index + direction;
       if (index < 0 || target < 0 || target >= current.length) return current;
@@ -898,7 +963,7 @@ export default function App() {
   }
 
   function restoreList(listId: string) {
-    setLists((current) =>
+    updateLists((current) =>
       current.map((list) => (list.id === listId ? { ...list, archived: false, deletedAt: null, updatedAt: nowIso() } : list))
     );
     showNotice("\u6E05\u5355\u5DF2\u6062\u590D");
@@ -909,7 +974,7 @@ export default function App() {
     if (!listId) return;
     const updatedAt = nowIso();
 
-    setLists((current) =>
+    updateLists((current) =>
       current.map((list) => (list.id === listId ? { ...list, archived: false, deletedAt: updatedAt, updatedAt } : list))
     );
     updateItems((current) =>
@@ -989,7 +1054,12 @@ export default function App() {
     }
   }
 
-  async function runSync() {
+  async function runSync(snapshot?: {
+    items: MemoItem[];
+    lists: MemoList[];
+    mutationVersion: number;
+    signature: string;
+  }) {
     const currentSession = sessionRef.current;
     if (!currentSession?.user || !isSupabaseConfigured) return;
     if (syncingRef.current) {
@@ -998,16 +1068,29 @@ export default function App() {
     }
 
     syncingRef.current = true;
-    const startedWithSignature = syncSignature(latestItemsRef.current, latestListsRef.current);
+    const itemsToSync = snapshot?.items ?? latestItemsRef.current;
+    const listsToSync = snapshot?.lists ?? latestListsRef.current;
+    const startedWithSignature = snapshot?.signature ?? syncSignature(itemsToSync, listsToSync);
+    const startedWithMutationVersion = snapshot?.mutationVersion ?? localMutationVersionRef.current;
+    const isStaleSync = () =>
+      localMutationVersionRef.current !== startedWithMutationVersion ||
+      syncSignature(latestItemsRef.current, latestListsRef.current) !== startedWithSignature;
     inFlightSyncSignatureRef.current = startedWithSignature;
     setSyncing(true);
     setSyncError(null);
 
     try {
-      const merged = await syncWithCloud(latestItemsRef.current, latestListsRef.current, currentSession.user);
-      const changedDuringSync = syncSignature(latestItemsRef.current, latestListsRef.current) !== startedWithSignature;
-      if (changedDuringSync) {
+      const merged = await syncWithCloud(itemsToSync, listsToSync, currentSession.user, {
+        shouldAbort: isStaleSync,
+      });
+      if (merged.aborted || isStaleSync()) {
         queuedSyncRef.current = true;
+        queuedSyncSnapshotRef.current = {
+          items: latestItemsRef.current,
+          lists: latestListsRef.current,
+          mutationVersion: localMutationVersionRef.current,
+          signature: syncSignature(latestItemsRef.current, latestListsRef.current),
+        };
         setPendingSync(true);
         return;
       }
@@ -1033,9 +1116,11 @@ export default function App() {
       inFlightSyncSignatureRef.current = "";
       setSyncing(false);
       if (queuedSyncRef.current) {
+        const queuedSnapshot = queuedSyncSnapshotRef.current;
         queuedSyncRef.current = false;
+        queuedSyncSnapshotRef.current = null;
         window.setTimeout(() => {
-          void runSync();
+          void runSync(queuedSnapshot ?? undefined);
         }, 0);
       }
     }

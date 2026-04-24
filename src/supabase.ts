@@ -110,8 +110,9 @@ export async function signOut(): Promise<void> {
 export async function syncWithCloud(
   localItems: MemoItem[],
   localLists: MemoList[],
-  user: User
-): Promise<{ items: MemoItem[]; lists: MemoList[] }> {
+  user: User,
+  options?: { shouldAbort?: () => boolean }
+): Promise<{ items: MemoItem[]; lists: MemoList[]; aborted?: boolean }> {
   if (!supabase) return { items: localItems, lists: localLists };
 
   const [{ data: itemData, error: itemError }, { data: listData, error: listError }] = await Promise.all([
@@ -128,15 +129,25 @@ export async function syncWithCloud(
   const mergedLists = mergeListsByNewest(sanitizedLocal.lists, remoteLists);
   const mergedItems = mergeItemsByNewest(sanitizedLocal.items, remoteItems);
 
+  if (options?.shouldAbort?.()) {
+    return { items: localItems, lists: localLists, aborted: true };
+  }
+
   const listPayload = mergedLists.map((list) => listToRemote(list, user.id));
   const itemPayload = mergedItems.map((item) => itemToRemote(item, user.id));
 
   if (listPayload.length > 0) {
+    if (options?.shouldAbort?.()) {
+      return { items: localItems, lists: localLists, aborted: true };
+    }
     const { error: upsertListError } = await supabase.from("memo_lists").upsert(listPayload, { onConflict: "id" });
     if (upsertListError) throw upsertListError;
   }
 
   if (itemPayload.length > 0) {
+    if (options?.shouldAbort?.()) {
+      return { items: localItems, lists: localLists, aborted: true };
+    }
     const { error: upsertItemError } = await supabase.from("memo_items").upsert(itemPayload, { onConflict: "id" });
     if (upsertItemError) throw upsertItemError;
   }
@@ -171,6 +182,21 @@ export async function deleteItemFromCloud(itemId: string, userId: string): Promi
 export async function deleteItemsFromCloud(itemIds: string[], userId: string): Promise<void> {
   if (!supabase || itemIds.length === 0) return;
   const { error } = await supabase.from("memo_items").delete().eq("user_id", userId).in("id", itemIds);
+  if (error) throw error;
+}
+
+export async function purgeItemsInCloud(itemIds: string[], userId: string, updatedAt: string): Promise<void> {
+  if (!supabase || itemIds.length === 0) return;
+  const { error } = await supabase
+    .from("memo_items")
+    .update({
+      status: "purged",
+      archived: false,
+      deleted_at: updatedAt,
+      updated_at: updatedAt,
+    })
+    .eq("user_id", userId)
+    .in("id", itemIds);
   if (error) throw error;
 }
 
