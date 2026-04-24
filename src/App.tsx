@@ -3827,8 +3827,12 @@ function getSyncStatus(
 }
 
 function errorMessage(error: unknown, fallback: string): string {
+  const schemaMessage = "\u6570\u636E\u5E93\u7ED3\u6784\u8FC7\u65E7\uFF0C\u8BF7\u91CD\u65B0\u6267\u884C supabase-schema.sql\uFF0C\u81F3\u5C11\u8865\u4E0A memo_lists.deleted_at \u4EE5\u53CA memo_items.status \u7684 purged \u7EA6\u675F\u3002";
+  const emailConfirmMessage = "\u90AE\u7BB1\u8FD8\u6CA1\u786E\u8BA4\u3002\u8BF7\u5173\u95ED Supabase \u7684 Confirm email \u540E\u518D\u767B\u5F55\u3002";
+
   if (error instanceof Error && error.message) {
-    if (isEmailConfirmIssue(error.message)) return "邮箱还没确认。请关闭 Supabase 的 Confirm email 后再登录。";
+    if (isEmailConfirmIssue(error.message)) return emailConfirmMessage;
+    if (isSchemaUpgradeIssue(error.message)) return schemaMessage;
     return error.message;
   }
   if (error && typeof error === "object") {
@@ -3837,20 +3841,33 @@ function errorMessage(error: unknown, fallback: string): string {
       .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
       .map((part) => part.trim());
     if (parts.length > 0) {
-      const code = typeof value.code === "string" ? ` [${value.code}]` : "";
-      const message = `${parts.join(" ")}${code}`;
-      if (isEmailConfirmIssue(message)) return "邮箱还没确认。请关闭 Supabase 的 Confirm email 后再登录。";
+      const code = typeof value.code === "string" ? " [" + value.code + "]" : "";
+      const message = parts.join(" ") + code;
+      if (isEmailConfirmIssue(message)) return emailConfirmMessage;
+      if (isSchemaUpgradeIssue(message)) return schemaMessage;
       return message;
     }
   }
-  if (typeof error === "string" && error.trim()) return error.trim();
+  if (typeof error === "string" && error.trim()) {
+    return isSchemaUpgradeIssue(error) ? schemaMessage : error.trim();
+  }
   return fallback;
 }
 
 function isEmailConfirmIssue(value: string | null | undefined): boolean {
   if (!value) return false;
   const text = value.toLowerCase();
-  return text.includes("confirm email") || text.includes("email not confirmed") || text.includes("邮箱还没确认");
+  return text.includes("confirm email") || text.includes("email not confirmed") || text.includes("\u90AE\u7BB1\u8FD8\u6CA1\u786E\u8BA4");
+}
+
+function isSchemaUpgradeIssue(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const text = value.toLowerCase();
+  return (
+    (text.includes("memo_lists") && text.includes("deleted_at")) ||
+    (text.includes("memo_items") && text.includes("status")) ||
+    text.includes("pgrst204")
+  );
 }
 
 function syncSignature(items: MemoItem[], lists: MemoList[]): string {

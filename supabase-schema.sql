@@ -4,6 +4,7 @@ create table if not exists public.memo_lists (
   name text not null,
   emoji text not null default '📋',
   archived boolean not null default false,
+  deleted_at timestamptz,
   created_at timestamptz not null,
   updated_at timestamptz not null
 );
@@ -15,7 +16,7 @@ create table if not exists public.memo_items (
   title text not null,
   body text not null default '',
   kind text not null check (kind in ('task', 'note')),
-  status text not null check (status in ('open', 'done')),
+  status text not null check (status in ('open', 'done', 'purged')),
   priority text not null check (priority in ('low', 'normal', 'high')),
   repeat_rule text not null default 'none' check (repeat_rule in ('none', 'daily', 'weekly', 'monthly')),
   due_date date,
@@ -37,11 +38,20 @@ add column if not exists reminder_at timestamptz;
 alter table public.memo_items
 add column if not exists repeat_rule text not null default 'none';
 
+alter table public.memo_lists
+add column if not exists deleted_at timestamptz;
+
 alter table public.memo_items
 drop constraint if exists memo_items_repeat_rule_check;
 
 alter table public.memo_items
 add constraint memo_items_repeat_rule_check check (repeat_rule in ('none', 'daily', 'weekly', 'monthly'));
+
+alter table public.memo_items
+drop constraint if exists memo_items_status_check;
+
+alter table public.memo_items
+add constraint memo_items_status_check check (status in ('open', 'done', 'purged'));
 
 alter table public.memo_items enable row level security;
 alter table public.memo_lists enable row level security;
