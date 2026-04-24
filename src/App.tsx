@@ -104,9 +104,7 @@ export default function App() {
   const [calendarViewMode, setCalendarViewMode] = useState<CalendarViewMode>("month");
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => getToday());
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [selectedListId, setSelectedListId] = useState<string | null>(() =>
-    initialPanel() === "calendar" ? null : defaultListsSeed[0].id
-  );
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [listNameDraft, setListNameDraft] = useState("");
   const [session, setSession] = useState<Session | null>(null);
@@ -323,6 +321,14 @@ export default function App() {
     () => lists.find((list) => list.id === hardDeleteListId) ?? null,
     [hardDeleteListId, lists]
   );
+
+  useEffect(() => {
+    if (!selectedListId) return;
+    if (activeLists.some((list) => list.id === selectedListId)) return;
+    setSelectedListId(null);
+    setEditingListId((current) => (current === selectedListId ? null : current));
+    setDraft((current) => (current.listId === selectedListId ? { ...current, listId: null } : current));
+  }, [activeLists, selectedListId]);
 
   function updateItems(updater: (current: MemoItem[]) => MemoItem[]) {
     setItems((current) => updater(current).sort(sortItems));
@@ -3773,7 +3779,7 @@ function viewTitle(view: ViewFilter): string {
   if (view === "archive") return "🗑 垃圾桶";
   if (view === "notes") return "📝 便签";
   if (view === "pinned") return "📌 置顶";
-  return "👋 欢迎";
+  return "📥 收集箱";
 }
 
 function getTagStats(items: MemoItem[]): Array<{ name: string; count: number }> {
