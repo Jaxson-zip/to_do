@@ -139,6 +139,12 @@ export async function fetchCloudStats(user: User): Promise<CloudStats> {
   };
 }
 
+export async function deleteItemFromCloud(itemId: string, userId: string): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase.from("memo_items").delete().eq("user_id", userId).eq("id", itemId);
+  if (error) throw error;
+}
+
 function mergeItemsByNewest(localItems: MemoItem[], remoteItems: MemoItem[]): MemoItem[] {
   const map = new Map<string, MemoItem>();
 

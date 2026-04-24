@@ -15,6 +15,7 @@ import {
   saveLists,
 } from "./storage";
 import {
+  deleteItemFromCloud,
   fetchCloudStats,
   getSession,
   isSupabaseConfigured,
@@ -479,8 +480,28 @@ export default function App() {
   }
 
   function permanentlyDelete(id: string) {
-    updateItems((current) => current.filter((item) => item.id !== id));
-    if (selectedId === id) setSelectedId(null);
+    void (async () => {
+      const currentSession = sessionRef.current;
+      setSyncError(null);
+
+      if (currentSession?.user && isSupabaseConfigured) {
+        try {
+          await deleteItemFromCloud(id, currentSession.user.id);
+        } catch (error) {
+          setSyncError(errorMessage(error, "云端删除失败"));
+          showNotice("彻底删除失败，请稍后重试");
+          return;
+        }
+      }
+
+      updateItems((current) => current.filter((item) => item.id !== id));
+      if (selectedId === id) setSelectedId(null);
+      setUndoItem((current) => (current?.id === id ? null : current));
+      setCloudStats((current) =>
+        current ? { ...current, items: Math.max(0, current.items - 1), fetchedAt: nowIso() } : current
+      );
+      showNotice("已彻底删除");
+    })();
   }
 
   function restoreDeletedItem() {
