@@ -17,6 +17,7 @@ import {
 import {
   deleteItemsFromCloud,
   deleteItemFromCloud,
+  deleteListFromCloud,
   fetchCloudStats,
   getSession,
   isSupabaseConfigured,
@@ -908,18 +909,35 @@ export default function App() {
   }
 
   function confirmHardDeleteList() {
-    const listId = hardDeleteListId;
-    if (!listId) return;
-    const updatedAt = nowIso();
+    void (async () => {
+      const listId = hardDeleteListId;
+      if (!listId) return;
+      const updatedAt = nowIso();
+      const currentSession = sessionRef.current;
+      setSyncError(null);
 
-    setLists((current) => current.filter((list) => list.id !== listId));
-    updateItems((current) =>
-      current.map((item) => (item.listId === listId ? { ...item, listId: null, updatedAt } : item))
-    );
-    if (selectedListId === listId) selectView("inbox");
-    if (defaultListId === listId) setDefaultListId(null);
-    setHardDeleteListId(null);
-    showNotice("清单已彻底删除，任务已移到收集箱");
+      if (currentSession?.user && isSupabaseConfigured) {
+        try {
+          await deleteListFromCloud(listId, currentSession.user.id);
+        } catch (error) {
+          setSyncError(errorMessage(error, "云端删除失败"));
+          showNotice("彻底删除清单失败，请稍后重试");
+          return;
+        }
+      }
+
+      setLists((current) => current.filter((list) => list.id !== listId));
+      updateItems((current) =>
+        current.map((item) => (item.listId === listId ? { ...item, listId: null, updatedAt } : item))
+      );
+      if (selectedListId === listId) selectView("inbox");
+      if (defaultListId === listId) setDefaultListId(null);
+      setCloudStats((current) =>
+        current ? { ...current, lists: Math.max(0, current.lists - 1), fetchedAt: nowIso() } : current
+      );
+      setHardDeleteListId(null);
+      showNotice("清单已彻底删除，任务已移到收集箱");
+    })();
   }
 
   async function submitPasswordLogin(event: FormEvent<HTMLFormElement>) {
@@ -1149,8 +1167,8 @@ export default function App() {
               <button
                 className="list-tool"
                 type="button"
-                aria-label={`删除${item.name}`}
-                title="删除"
+                aria-label={`归档${item.name}`}
+                title="归档"
                 onClick={() => archiveList(item.id)}
               >
                 <Icon name="x" />
@@ -1887,7 +1905,7 @@ export default function App() {
                 <Icon name="x" />
               </button>
             </header>
-            <p>可以调整清单顺序、改图标和名称。归档后的清单会隐藏，任务会保留。</p>
+            <p>可以调整清单顺序、改图标和名称。归档后的清单会隐藏，仍可恢复；彻底删除会从所有设备移除该清单。</p>
             <div className="list-manager-list">
               {lists.map((list, index) => (
                 <div className={list.archived ? "list-manager-row archived" : "list-manager-row"} key={list.id}>
@@ -2007,22 +2025,22 @@ export default function App() {
 
       {deleteListTarget && (
         <div className="app-modal-backdrop" role="presentation" onMouseDown={() => setDeleteListId(null)}>
-          <section className="app-modal danger" aria-label="删除清单" onMouseDown={(event) => event.stopPropagation()}>
+          <section className="app-modal danger" aria-label="归档清单" onMouseDown={(event) => event.stopPropagation()}>
             <header>
-              <strong>删除清单</strong>
+              <strong>归档清单</strong>
               <button type="button" aria-label="关闭" onClick={() => setDeleteListId(null)}>
                 <Icon name="x" />
               </button>
             </header>
             <p>
-              「{deleteListTarget.name}」里的 {countByList(items, deleteListTarget.id)} 个未完成任务会移到收集箱。
+              「{deleteListTarget.name}」会从侧边栏隐藏，里面的 {countByList(items, deleteListTarget.id)} 个未完成任务会移到收集箱。
             </p>
             <footer>
               <button type="button" onClick={() => setDeleteListId(null)}>
                 取消
               </button>
               <button type="button" onClick={confirmArchiveList}>
-                删除
+                归档
               </button>
             </footer>
           </section>
@@ -3355,7 +3373,7 @@ function UtilityPanel({
         <h2>帮助</h2>
         <div className="help-list">
           <p>点击左侧清单切换分类。</p>
-          <p>清单右侧的铅笔可以重命名，叉号可以删除。</p>
+          <p>清单右侧的铅笔可以重命名，叉号会先归档；需要时可在清单管理里彻底删除。</p>
           <p>点击任务后，右侧会打开完整详情。</p>
           <p>在详情里可以移动清单、设置日期、优先级和标签。</p>
         </div>
