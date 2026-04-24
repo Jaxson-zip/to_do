@@ -15,7 +15,6 @@ import {
   saveLists,
 } from "./storage";
 import {
-  deleteListFromCloud,
   fetchCloudStats,
   getSession,
   isSupabaseConfigured,
@@ -173,7 +172,7 @@ export default function App() {
   }, [defaultListId]);
 
   useEffect(() => {
-    if (defaultListId && !lists.some((list) => list.id === defaultListId && !list.archived)) {
+    if (defaultListId && !lists.some((list) => list.id === defaultListId && !list.archived && !list.deletedAt)) {
       setDefaultListId(null);
     }
   }, [defaultListId, lists]);
@@ -285,7 +284,7 @@ export default function App() {
     return () => window.clearInterval(intervalId);
   }, [items]);
 
-  const activeLists = useMemo(() => lists.filter((list) => !list.archived), [lists]);
+  const activeLists = useMemo(() => lists.filter((list) => !list.archived && !list.deletedAt), [lists]);
   const selectedList = useMemo(
     () => activeLists.find((list) => list.id === selectedListId) ?? null,
     [activeLists, selectedListId]
@@ -560,6 +559,7 @@ export default function App() {
       name,
       emoji: nextListEmoji(lists.length),
       archived: false,
+      deletedAt: null,
       createdAt,
       updatedAt: createdAt,
     };
@@ -859,9 +859,10 @@ export default function App() {
     const createdAt = nowIso();
     const list: MemoList = {
       id: createId(),
-      name: "新清单",
+      name: "\u65B0\u6E05\u5355",
       emoji: nextListEmoji(lists.length),
       archived: false,
+      deletedAt: null,
       createdAt,
       updatedAt: createdAt,
     };
@@ -870,7 +871,7 @@ export default function App() {
     setSelectedListId(list.id);
     setView("inbox");
     setActivePanel("tasks");
-    showNotice("已新增清单，可直接改名");
+    showNotice("\u5DF2\u65B0\u589E\u6E05\u5355\uFF0C\u53EF\u76F4\u63A5\u4FEE\u6539\u540D\u79F0");
   }
 
   function moveList(listId: string, direction: -1 | 1) {
@@ -889,41 +890,29 @@ export default function App() {
 
   function restoreList(listId: string) {
     setLists((current) =>
-      current.map((list) => (list.id === listId ? { ...list, archived: false, updatedAt: nowIso() } : list))
+      current.map((list) => (list.id === listId ? { ...list, archived: false, deletedAt: null, updatedAt: nowIso() } : list))
     );
-    showNotice("清单已恢复");
+    showNotice("\u6E05\u5355\u5DF2\u6062\u590D");
   }
 
   function confirmHardDeleteList() {
-    void (async () => {
-      const listId = hardDeleteListId;
-      if (!listId) return;
-      const updatedAt = nowIso();
-      const currentSession = sessionRef.current;
-      setSyncError(null);
+    const listId = hardDeleteListId;
+    if (!listId) return;
+    const updatedAt = nowIso();
 
-      if (currentSession?.user && isSupabaseConfigured) {
-        try {
-          await deleteListFromCloud(listId, currentSession.user.id);
-        } catch (error) {
-          setSyncError(errorMessage(error, "云端删除失败"));
-          showNotice("彻底删除清单失败，请稍后重试");
-          return;
-        }
-      }
-
-      setLists((current) => current.filter((list) => list.id !== listId));
-      updateItems((current) =>
-        current.map((item) => (item.listId === listId ? { ...item, listId: null, updatedAt } : item))
-      );
-      selectView("inbox");
-      if (defaultListId === listId) setDefaultListId(null);
-      setCloudStats((current) =>
-        current ? { ...current, lists: Math.max(0, current.lists - 1), fetchedAt: nowIso() } : current
-      );
-      setHardDeleteListId(null);
-      showNotice("清单已彻底删除，任务已移到收集箱");
-    })();
+    setLists((current) =>
+      current.map((list) => (list.id === listId ? { ...list, archived: false, deletedAt: updatedAt, updatedAt } : list))
+    );
+    updateItems((current) =>
+      current.map((item) => (item.listId === listId ? { ...item, listId: null, updatedAt } : item))
+    );
+    selectView("inbox");
+    if (defaultListId === listId) setDefaultListId(null);
+    setCloudStats((current) =>
+      current ? { ...current, lists: Math.max(0, current.lists - 1), fetchedAt: nowIso() } : current
+    );
+    setHardDeleteListId(null);
+    showNotice("\u6E05\u5355\u5DF2\u5F7B\u5E95\u5220\u9664\uFF0C\u4EFB\u52A1\u5DF2\u79FB\u5230\u6536\u96C6\u7BB1");
   }
 
   async function submitPasswordLogin(event: FormEvent<HTMLFormElement>) {
@@ -1897,7 +1886,7 @@ export default function App() {
             </header>
             <p>可以调整清单顺序、改图标和名称。归档后的清单会隐藏，仍可恢复；彻底删除会从所有设备移除该清单。</p>
             <div className="list-manager-list">
-              {lists.map((list, index) => (
+              {lists.filter((list) => !list.deletedAt).map((list, index) => (
                 <div className={list.archived ? "list-manager-row archived" : "list-manager-row"} key={list.id}>
                   <input
                     className="list-emoji-input"
@@ -3523,6 +3512,7 @@ function initialLists(): MemoList[] {
   return defaultListsSeed.map((list, index) => ({
     ...list,
     archived: false,
+    deletedAt: null,
     createdAt,
     updatedAt: new Date(Date.now() - index * 1000).toISOString(),
   }));
@@ -3553,8 +3543,8 @@ function getLocalSyncStats(items: MemoItem[], lists: MemoList[]): LocalSyncStats
     items: items.filter((item) => item.status !== "purged").length,
     openItems: items.filter((item) => item.status !== "purged" && !item.deletedAt && !item.archived && item.status === "open").length,
     deletedItems: items.filter((item) => item.status !== "purged" && item.deletedAt).length,
-    lists: lists.length,
-    activeLists: lists.filter((list) => !list.archived).length,
+    lists: lists.filter((list) => !list.deletedAt).length,
+    activeLists: lists.filter((list) => !list.archived && !list.deletedAt).length,
   };
 }
 
@@ -3878,7 +3868,7 @@ function syncSignature(items: MemoItem[], lists: MemoList[]): string {
     )
     .sort();
   const listParts = lists
-    .map((list) => [list.id, list.updatedAt, list.archived ? "1" : "0"].join(":"))
+    .map((list) => [list.id, list.updatedAt, list.archived ? "1" : "0", list.deletedAt ?? ""].join(":"))
     .sort();
 
   return `${itemParts.join("|")}::${listParts.join("|")}`;

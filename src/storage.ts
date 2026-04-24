@@ -166,6 +166,7 @@ function normalizeMemoList(value: unknown): MemoList | null {
     name: list.name,
     emoji: list.emoji,
     archived: list.archived,
+    deletedAt: typeof list.deletedAt === "string" ? list.deletedAt : null,
     createdAt: list.createdAt,
     updatedAt: list.updatedAt,
   };

@@ -36,6 +36,7 @@ type RemoteMemoList = {
   name: string;
   emoji: string;
   archived: boolean;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -126,7 +127,7 @@ export async function fetchCloudStats(user: User): Promise<CloudStats> {
 
   const [{ count: itemCount, error: itemError }, { count: listCount, error: listError }] = await Promise.all([
     supabase.from("memo_items").select("id", { count: "exact", head: true }).eq("user_id", user.id).neq("status", "purged"),
-    supabase.from("memo_lists").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+    supabase.from("memo_lists").select("id", { count: "exact", head: true }).eq("user_id", user.id).is("deleted_at", null),
   ]);
 
   if (itemError) throw itemError;
@@ -148,12 +149,6 @@ export async function deleteItemFromCloud(itemId: string, userId: string): Promi
 export async function deleteItemsFromCloud(itemIds: string[], userId: string): Promise<void> {
   if (!supabase || itemIds.length === 0) return;
   const { error } = await supabase.from("memo_items").delete().eq("user_id", userId).in("id", itemIds);
-  if (error) throw error;
-}
-
-export async function deleteListFromCloud(listId: string, userId: string): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.from("memo_lists").delete().eq("user_id", userId).eq("id", listId);
   if (error) throw error;
 }
 
@@ -242,6 +237,7 @@ function listToRemote(list: MemoList, userId: string): RemoteMemoList {
     name: list.name,
     emoji: list.emoji,
     archived: list.archived,
+    deleted_at: list.deletedAt,
     created_at: list.createdAt,
     updated_at: list.updatedAt,
   };
@@ -253,6 +249,7 @@ function listFromRemote(list: RemoteMemoList): MemoList {
     name: list.name,
     emoji: list.emoji,
     archived: list.archived,
+    deletedAt: list.deleted_at,
     createdAt: list.created_at,
     updatedAt: list.updated_at,
   };

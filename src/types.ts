@@ -9,6 +9,7 @@ export interface MemoList {
   name: string;
   emoji: string;
   archived: boolean;
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
