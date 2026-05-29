@@ -23,3 +23,4 @@ vite.config.d.ts
 
 # Local QA screenshots generated in the project root
 /*.png
+.vercel
