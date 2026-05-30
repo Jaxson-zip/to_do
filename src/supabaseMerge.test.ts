@@ -55,6 +55,29 @@ describe("mergeItemsByNewest", () => {
     expect(merged).toHaveLength(1);
     expect(merged[0].status).toBe("purged");
   });
+
+  it("keeps cleared demo items from coming back under a different id", () => {
+    const clearedDemo = makeItem({
+      id: "local-demo",
+      title: "点击输入框，创建任务",
+      status: "purged",
+      deletedAt: "2026-04-24T01:00:00.000Z",
+      updatedAt: "2026-04-24T01:00:00.000Z",
+    });
+    const staleRemoteDemo = makeItem({
+      id: "remote-demo",
+      title: "点击输入框，创建任务",
+      status: "open",
+      deletedAt: null,
+      updatedAt: "2026-04-24T05:00:00.000Z",
+    });
+
+    const merged = mergeItemsByNewest([clearedDemo], [staleRemoteDemo]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].id).toBe("local-demo");
+    expect(merged[0].status).toBe("purged");
+  });
 });
 
 describe("mergeListsByNewest", () => {

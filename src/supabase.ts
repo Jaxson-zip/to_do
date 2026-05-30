@@ -1,4 +1,5 @@
 import { createClient, type Session, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { DEMO_ITEM_TITLES, isDemoItemTitle } from "./demoItems";
 import { createId } from "./storage";
 import type { MemoItem, MemoList } from "./types";
 
@@ -16,19 +17,6 @@ const legacyDefaultListIds = new Set([
   "22222222-2222-4222-8222-222222222222",
   "33333333-3333-4333-8333-333333333333",
   "44444444-4444-4444-8444-444444444444",
-]);
-
-const demoItemTitles = new Set([
-  "点击输入框，创建任务",
-  "用清单来管理任务",
-  "日历：日程安排一目了然",
-  "四象限：提升效率利器",
-  "番茄专注：拯救拖延症",
-  "习惯打卡：见证坚持与成长",
-  "看板、时间线视图：可视化管理",
-  "桌面便签：随时记录想法",
-  "订阅日历：不再错过重要日程",
-  "更多特色功能",
 ]);
 
 type RemoteMemoItem = {
@@ -200,10 +188,32 @@ export async function purgeItemsInCloud(itemIds: string[], userId: string, updat
   if (error) throw error;
 }
 
+export async function purgeDemoItemsInCloud(userId: string, updatedAt: string): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from("memo_items")
+    .update({
+      status: "purged",
+      archived: false,
+      deleted_at: updatedAt,
+      updated_at: updatedAt,
+    })
+    .eq("user_id", userId)
+    .in("title", DEMO_ITEM_TITLES);
+  if (error) throw error;
+}
+
 export function mergeItemsByNewest(localItems: MemoItem[], remoteItems: MemoItem[]): MemoItem[] {
   const map = new Map<string, MemoItem>();
+  const purgedDemoTitles = new Set(
+    [...localItems, ...remoteItems]
+      .filter((item) => item.status === "purged" && isDemoItemTitle(item.title))
+      .map((item) => item.title)
+  );
 
   for (const item of [...remoteItems, ...localItems]) {
+    if (purgedDemoTitles.has(item.title) && item.status !== "purged" && isDemoItemTitle(item.title)) continue;
+
     const existing = map.get(item.id);
     if (!existing) {
       map.set(item.id, item);
@@ -285,7 +295,7 @@ function sanitizeLegacyDefaultListIds(
         return nextId ? { ...list, id: nextId } : list;
       }),
     items: localItems
-      .filter((item) => !(hasRemoteData && demoItemTitles.has(item.title)))
+      .filter((item) => !(hasRemoteData && isDemoItemTitle(item.title) && item.status !== "purged"))
       .map((item) => {
         const nextListId = item.listId ? replacements.get(item.listId) : null;
         return nextListId ? { ...item, listId: nextListId } : item;

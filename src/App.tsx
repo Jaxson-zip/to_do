@@ -19,6 +19,7 @@ import {
   getSession,
   isSupabaseConfigured,
   onAuthChange,
+  purgeDemoItemsInCloud,
   purgeItemsInCloud,
   signInWithPassword,
   signOut,
@@ -27,6 +28,7 @@ import {
   syncWithCloud,
   type CloudStats,
 } from "./supabase";
+import { isDemoItemTitle } from "./demoItems";
 import type { DraftItem, MemoItem, MemoList, Priority, RepeatRule, ViewFilter } from "./types";
 
 type SyncSnapshot = {
@@ -82,19 +84,6 @@ const matrixQuadrants: Array<{ id: MatrixQuadrant; title: string; hint: string; 
   { id: "urgent", title: "紧急不重要", hint: "快速处理", rule: "今天" },
   { id: "later", title: "不紧急不重要", hint: "延后或删除", rule: "低优先级" },
 ];
-
-const demoItemTitles = new Set([
-  "点击输入框，创建任务",
-  "用清单来管理任务",
-  "日历：日程安排一目了然",
-  "四象限：提升效率利器",
-  "番茄专注：拯救拖延症",
-  "习惯打卡：见证坚持与成长",
-  "看板、时间线视图：可视化管理",
-  "桌面便签：随时记录想法",
-  "订阅日历：不再错过重要日程",
-  "更多特色功能",
-]);
 
 export default function App() {
   const initialFocusSettings = useMemo(() => loadFocusSettings(), []);
@@ -730,16 +719,23 @@ export default function App() {
 
     updateItems((current) =>
       current.map((item) =>
-        removedIds.has(item.id) ? { ...item, deletedAt: updatedAt, archived: false, updatedAt } : item
+        removedIds.has(item.id)
+          ? { ...item, status: "purged", archived: false, deletedAt: updatedAt, updatedAt }
+          : item
       )
     );
 
     if (selectedId && removedIds.has(selectedId)) setSelectedId(null);
+    setUndoItem((current) => (current && removedIds.has(current.id) ? null : current));
+    setCloudStats((current) =>
+      current ? { ...current, items: Math.max(0, current.items - removedIds.size), fetchedAt: nowIso() } : current
+    );
     setClearExamplesOpen(false);
-    showNotice(`已将 ${removedIds.size} 条示例内容移到垃圾桶`);
+    showNotice(`已彻底清除 ${removedIds.size} 条示例内容`);
+    enforcePurgedItems(Array.from(removedIds), updatedAt, { purgeDemoTitles: true });
   }
 
-  function enforcePurgedItems(itemIds: string[], updatedAt: string) {
+  function enforcePurgedItems(itemIds: string[], updatedAt: string, options?: { purgeDemoTitles?: boolean }) {
     const syncSnapshot: SyncSnapshot = {
       items: latestItemsRef.current.map((item) =>
         itemIds.includes(item.id) ? { ...item, status: "purged", archived: false, deletedAt: updatedAt, updatedAt } : item
@@ -756,6 +752,9 @@ export default function App() {
 
       try {
         await purgeItemsInCloud(itemIds, currentSession.user.id, updatedAt);
+        if (options?.purgeDemoTitles) {
+          await purgeDemoItemsInCloud(currentSession.user.id, updatedAt);
+        }
       } catch (error) {
         setSyncError(errorMessage(error, "彻底删除同步失败"));
       }
@@ -2224,13 +2223,13 @@ export default function App() {
                 <Icon name="x" />
               </button>
             </header>
-            <p>将 {demoItemCount} 条内置演示任务移到垃圾桶，保留你的清单、账号和其他任务。</p>
+            <p>将 {demoItemCount} 条内置演示任务彻底清除，并同步删除云端旧示例；保留你的清单、账号和其他任务。</p>
             <footer>
               <button type="button" onClick={() => setClearExamplesOpen(false)}>
                 取消
               </button>
               <button type="button" onClick={clearExampleContent}>
-                清除
+                彻底清除
               </button>
             </footer>
           </section>
@@ -3877,7 +3876,7 @@ function getTagStats(items: MemoItem[]): Array<{ name: string; count: number }> 
 }
 
 function isDemoItem(item: MemoItem): boolean {
-  return !item.deletedAt && demoItemTitles.has(item.title);
+  return item.status !== "purged" && isDemoItemTitle(item.title);
 }
 
 function countDemoItems(items: MemoItem[]): number {
