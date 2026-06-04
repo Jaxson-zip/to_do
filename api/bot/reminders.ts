@@ -4,10 +4,11 @@ import { hasValidBotSecret, readJsonBody, requirePost, sendJson } from "../_bot/
 import { sendClawBotMessage } from "../_bot/clawbot";
 import { getSupabaseAdmin } from "../_bot/supabaseAdmin";
 import {
+  claimReminderDelivery,
   fetchDueReminderTasks,
   getBotBindingByUserId,
-  getReminderEvent,
   markReminderSent,
+  releaseReminderClaim,
 } from "../_bot/todoRepository";
 
 type ReminderRequestPayload = {
@@ -51,13 +52,6 @@ export default async function handler(request: VercelRequest, response: VercelRe
         continue;
       }
 
-      const existing = await getReminderEvent(supabase, item.id, item.reminderAt);
-      if (existing?.sent_at) {
-        result.skipped += 1;
-        result.details.push({ itemId: item.id, status: "skipped", reason: "already sent" });
-        continue;
-      }
-
       const binding = await getBotBindingByUserId(supabase, item.userId);
       if (!binding) {
         result.skipped += 1;
@@ -65,14 +59,32 @@ export default async function handler(request: VercelRequest, response: VercelRe
         continue;
       }
 
+      const claim = await claimReminderDelivery(supabase, item, binding, nowIso);
+      if (claim.status === "already_sent") {
+        result.skipped += 1;
+        result.details.push({ itemId: item.id, status: "skipped", reason: "already sent" });
+        continue;
+      }
+      if (claim.status === "claimed_elsewhere") {
+        result.skipped += 1;
+        result.details.push({ itemId: item.id, status: "skipped", reason: "claimed elsewhere" });
+        continue;
+      }
+
       const sendResult = await sendClawBotMessage(binding.provider_user_id, `提醒：${formatTaskLine(item)}\n回复“完成 ${item.title}”可以标记完成。`);
       if (sendResult.status === "sent") {
-        await markReminderSent(supabase, item, binding, nowIso);
+        const marked = await markReminderSent(supabase, item, claim.token, nowIso);
+        if (!marked) {
+          result.failed += 1;
+          result.details.push({ itemId: item.id, status: "failed", reason: "claim lost before marking sent" });
+          continue;
+        }
         result.sent += 1;
         result.details.push({ itemId: item.id, status: "sent" });
         continue;
       }
 
+      await releaseReminderClaim(supabase, item, claim.token);
       if (sendResult.status === "skipped") {
         result.skipped += 1;
         result.details.push({ itemId: item.id, status: "skipped", reason: sendResult.reason });

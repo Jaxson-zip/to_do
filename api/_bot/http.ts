@@ -58,4 +58,3 @@ export function isValidSharedSecret(candidate: string | null | undefined): boole
   if (expectedBuffer.length !== candidateBuffer.length) return false;
   return timingSafeEqual(expectedBuffer, candidateBuffer);
 }
-

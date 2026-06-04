@@ -75,8 +75,8 @@ Successful replies look like:
 The binding flow is:
 
 ```text
-Website creates a code like TD-839201
-User sends "绑定 TD-839201" to ClawBot
+Website creates a code like TD-1234567890
+User sends "绑定 TD-1234567890" to ClawBot
 Bot stores ClawBot sender id -> Supabase user id
 Future messages read/write that user's tasks
 ```
@@ -92,13 +92,13 @@ Response:
 
 ```json
 {
-  "code": "TD-839201",
+  "code": "TD-1234567890",
   "expiresAt": "2026-06-04T13:10:00.000Z",
-  "instruction": "请在微信机器人里发送：绑定 TD-839201"
+  "instruction": "请在微信机器人里发送：绑定 TD-1234567890"
 }
 ```
 
-The code expires after 10 minutes and can only be used once.
+The code expires after 10 minutes and can only be used once. Codes are retried on rare collisions.
 
 ## Reminder Worker
 
@@ -138,6 +138,8 @@ If `CLAWBOT_SEND_MESSAGE_URL` or `CLAWBOT_SEND_MESSAGE_TOKEN` is missing, due re
 
 Supabase Cron can call the Vercel reminder endpoint every minute through `pg_cron` and `pg_net`.
 
+This endpoint intentionally supports the Supabase Cron `POST` flow below. It is not configured for native Vercel Cron because Vercel Cron invokes routes with `GET`, and Vercel Hobby cron is not suitable for minute-level reminders.
+
 Run this in Supabase SQL Editor after replacing the URL and secret:
 
 ```sql
@@ -172,7 +174,7 @@ Invoke-RestMethod `
   -Uri "https://your-vercel-domain.vercel.app/api/bot/message" `
   -Headers @{ "x-bot-secret" = "your BOT_WEBHOOK_SECRET" } `
   -ContentType "application/json" `
-  -Body '{"senderId":"demo-user","text":"绑定 TD-839201"}'
+  -Body '{"senderId":"demo-user","text":"绑定 TD-1234567890"}'
 ```
 
 Create task:
@@ -224,4 +226,3 @@ Invoke-RestMethod `
 - The exact ClawBot send-message payload may need one small adjustment after you see the real ClawBot configuration page. The current helper sends common fields: `to`, `userId`, `recipientId`, `text`, and `message`.
 - The incoming webhook is intentionally flexible so most ClawBot payload shapes work without code changes.
 - The website does not yet show a "Generate WeChat binding code" button. The backend endpoint is ready; adding the small UI is a separate polish step.
-

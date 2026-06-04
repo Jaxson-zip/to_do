@@ -20,17 +20,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
       return;
     }
 
-    const code = generateBindingCode();
-    const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
-
     await supabase.from("bot_binding_codes").delete().eq("user_id", data.user.id).is("used_at", null);
-
-    const { error: insertError } = await supabase.from("bot_binding_codes").insert({
-      code,
-      user_id: data.user.id,
-      expires_at: expiresAt,
-    });
-    if (insertError) throw insertError;
+    const { code, expiresAt } = await createBindingCode(supabase, data.user.id);
 
     sendJson(response, 200, {
       code,
@@ -44,6 +35,26 @@ export default async function handler(request: VercelRequest, response: VercelRe
 }
 
 function generateBindingCode(): string {
-  return `TD-${randomInt(100000, 999999)}`;
+  return `TD-${randomInt(1_000_000_000, 10_000_000_000)}`;
 }
 
+async function createBindingCode(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string
+): Promise<{ code: string; expiresAt: string }> {
+  const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = generateBindingCode();
+    const { error } = await supabase.from("bot_binding_codes").insert({
+      code,
+      user_id: userId,
+      expires_at: expiresAt,
+    });
+
+    if (!error) return { code, expiresAt };
+    if (error.code !== "23505") throw error;
+  }
+
+  throw new Error("Could not generate a unique binding code");
+}

@@ -9,6 +9,10 @@ describe("parseBotIntent", () => {
       type: "bind",
       code: "TD-839201",
     });
+    expect(parseBotIntent("绑定 TD-1234567890", baseDate)).toEqual({
+      type: "bind",
+      code: "TD-1234567890",
+    });
     expect(parseBotIntent("bind td839201", baseDate)).toEqual({
       type: "bind",
       code: "TD839201",

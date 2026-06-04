@@ -34,4 +34,3 @@ export async function sendClawBotMessage(providerUserId: string, text: string): 
     return { status: "failed", reason: error instanceof Error ? error.message : String(error) };
   }
 }
-

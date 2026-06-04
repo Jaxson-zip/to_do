@@ -36,6 +36,9 @@ export type BotReminderEventRow = {
   provider: "clawbot";
   provider_user_id: string;
   reminder_at: string;
+  attempted_at: string | null;
+  claim_token: string | null;
+  claim_expires_at: string | null;
   sent_at: string | null;
   snoozed_until: string | null;
 };
@@ -50,6 +53,11 @@ export type BindingCodeRow = {
   expires_at: string;
   used_at: string | null;
 };
+
+export type ReminderClaim =
+  | { status: "claimed"; token: string }
+  | { status: "already_sent" }
+  | { status: "claimed_elsewhere" };
 
 export function memoItemFromRow(row: MemoItemRow): MemoItem {
   return {
@@ -185,25 +193,101 @@ export async function getReminderEvent(
   return (data as BotReminderEventRow | null) ?? null;
 }
 
-export async function markReminderSent(
+export async function claimReminderDelivery(
   supabase: SupabaseClient,
   item: MemoItem,
   binding: BotBindingRow,
-  sentAt: string
-): Promise<void> {
-  if (!item.reminderAt) return;
+  nowIso: string
+): Promise<ReminderClaim> {
+  if (!item.reminderAt) return { status: "claimed_elsewhere" };
 
-  const { error } = await supabase.from("bot_reminder_events").upsert(
+  const token = randomUUID();
+  const claimExpiresAt = new Date(new Date(nowIso).getTime() + 2 * 60_000).toISOString();
+  const { error } = await supabase.from("bot_reminder_events").insert(
     {
       item_id: item.id,
       user_id: binding.user_id,
       provider: "clawbot",
       provider_user_id: binding.provider_user_id,
       reminder_at: item.reminderAt,
-      sent_at: sentAt,
-    },
-    { onConflict: "item_id,provider,reminder_at" }
+      attempted_at: nowIso,
+      claim_token: token,
+      claim_expires_at: claimExpiresAt,
+    }
   );
+
+  if (!error) return { status: "claimed", token };
+  if (error.code !== "23505") throw error;
+
+  const existing = await getReminderEvent(supabase, item.id, item.reminderAt);
+  if (existing?.sent_at) return { status: "already_sent" };
+  if (existing?.claim_expires_at && new Date(existing.claim_expires_at).getTime() > new Date(nowIso).getTime()) {
+    return { status: "claimed_elsewhere" };
+  }
+
+  const query = supabase
+    .from("bot_reminder_events")
+    .update({
+      attempted_at: nowIso,
+      claim_token: token,
+      claim_expires_at: claimExpiresAt,
+    })
+    .eq("provider", "clawbot")
+    .eq("item_id", item.id)
+    .eq("reminder_at", item.reminderAt)
+    .is("sent_at", null);
+
+  const { data, error: updateError } = await (existing?.claim_expires_at
+    ? query.lte("claim_expires_at", nowIso)
+    : query.is("claim_expires_at", null)
+  )
+    .select("id")
+    .maybeSingle();
+
+  if (updateError) throw updateError;
+  return data ? { status: "claimed", token } : { status: "claimed_elsewhere" };
+}
+
+export async function markReminderSent(
+  supabase: SupabaseClient,
+  item: MemoItem,
+  claimToken: string,
+  sentAt: string
+): Promise<boolean> {
+  if (!item.reminderAt) return false;
+
+  const { data, error } = await supabase
+    .from("bot_reminder_events")
+    .update({
+      sent_at: sentAt,
+      claim_token: null,
+      claim_expires_at: null,
+    })
+    .eq("provider", "clawbot")
+    .eq("item_id", item.id)
+    .eq("reminder_at", item.reminderAt)
+    .eq("claim_token", claimToken)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
+}
+
+export async function releaseReminderClaim(supabase: SupabaseClient, item: MemoItem, claimToken: string): Promise<void> {
+  if (!item.reminderAt) return;
+
+  const { error } = await supabase
+    .from("bot_reminder_events")
+    .update({
+      claim_token: null,
+      claim_expires_at: null,
+    })
+    .eq("provider", "clawbot")
+    .eq("item_id", item.id)
+    .eq("reminder_at", item.reminderAt)
+    .eq("claim_token", claimToken);
+
   if (error) throw error;
 }
 
@@ -212,33 +296,15 @@ export async function bindProviderUser(
   providerUserId: string,
   code: string
 ): Promise<"bound" | "invalid"> {
-  const now = new Date().toISOString();
-  const { data, error } = await supabase
-    .from("bot_binding_codes")
-    .select("code, user_id, expires_at, used_at")
-    .eq("code", code)
-    .is("used_at", null)
-    .gt("expires_at", now)
-    .maybeSingle();
-
-  if (error) throw error;
-  const bindingCode = data as BindingCodeRow | null;
-  if (!bindingCode) return "invalid";
-
-  await supabase.from("bot_bindings").delete().eq("provider", "clawbot").eq("provider_user_id", providerUserId);
-  await supabase.from("bot_bindings").delete().eq("provider", "clawbot").eq("user_id", bindingCode.user_id);
-
-  const { error: insertError } = await supabase.from("bot_bindings").insert({
-    provider: "clawbot",
-    provider_user_id: providerUserId,
-    user_id: bindingCode.user_id,
+  const { data, error } = await supabase.rpc("consume_bot_binding_code", {
+    p_provider: "clawbot",
+    p_provider_user_id: providerUserId,
+    p_code: code.toUpperCase(),
   });
-  if (insertError) throw insertError;
+  if (error) throw error;
 
-  const { error: updateError } = await supabase.from("bot_binding_codes").update({ used_at: now }).eq("code", code);
-  if (updateError) throw updateError;
-
-  return "bound";
+  const first = Array.isArray(data) ? (data[0] as { result?: string } | undefined) : (data as { result?: string } | null);
+  return first?.result === "bound" ? "bound" : "invalid";
 }
 
 export async function markTaskDone(supabase: SupabaseClient, userId: string, itemId: string): Promise<void> {

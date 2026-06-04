@@ -146,4 +146,3 @@ function firstString(...values: Array<string | undefined>): string | null {
   }
   return null;
 }
-

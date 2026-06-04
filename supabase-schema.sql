@@ -56,6 +56,9 @@ create table if not exists public.bot_reminder_events (
   provider text not null check (provider in ('clawbot')),
   provider_user_id text not null,
   reminder_at timestamptz not null,
+  attempted_at timestamptz,
+  claim_token uuid,
+  claim_expires_at timestamptz,
   sent_at timestamptz,
   snoozed_until timestamptz,
   created_at timestamptz not null default now(),
@@ -73,6 +76,15 @@ add column if not exists repeat_rule text not null default 'none';
 
 alter table public.memo_lists
 add column if not exists deleted_at timestamptz;
+
+alter table public.bot_reminder_events
+add column if not exists attempted_at timestamptz;
+
+alter table public.bot_reminder_events
+add column if not exists claim_token uuid;
+
+alter table public.bot_reminder_events
+add column if not exists claim_expires_at timestamptz;
 
 alter table public.memo_items
 drop constraint if exists memo_items_repeat_rule_check;
@@ -149,11 +161,74 @@ create policy "Users can read their own bot reminder events"
 on public.bot_reminder_events for select
 using (auth.uid() = user_id);
 
+create or replace function public.consume_bot_binding_code(
+  p_provider text,
+  p_provider_user_id text,
+  p_code text
+)
+returns table (result text, bound_user_id uuid)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_user_id uuid;
+begin
+  if p_provider <> 'clawbot' then
+    result := 'invalid';
+    bound_user_id := null;
+    return next;
+    return;
+  end if;
+
+  select user_id
+  into target_user_id
+  from public.bot_binding_codes
+  where code = upper(p_code)
+    and used_at is null
+    and expires_at > now()
+  for update;
+
+  if target_user_id is null then
+    result := 'invalid';
+    bound_user_id := null;
+    return next;
+    return;
+  end if;
+
+  delete from public.bot_bindings
+  where provider = p_provider
+    and (provider_user_id = p_provider_user_id or user_id = target_user_id);
+
+  insert into public.bot_bindings (provider, provider_user_id, user_id)
+  values (p_provider, p_provider_user_id, target_user_id);
+
+  update public.bot_binding_codes
+  set used_at = now()
+  where code = upper(p_code);
+
+  result := 'bound';
+  bound_user_id := target_user_id;
+  return next;
+end;
+$$;
+
+revoke all on function public.consume_bot_binding_code(text, text, text) from public;
+grant execute on function public.consume_bot_binding_code(text, text, text) to service_role;
+
 create index if not exists memo_items_user_updated_idx
 on public.memo_items (user_id, updated_at desc);
 
 create index if not exists memo_lists_user_updated_idx
 on public.memo_lists (user_id, updated_at desc);
+
+create index if not exists memo_items_due_reminder_idx
+on public.memo_items (reminder_at)
+where kind = 'task'
+  and status = 'open'
+  and archived = false
+  and deleted_at is null
+  and reminder_at is not null;
 
 create index if not exists bot_bindings_provider_user_idx
 on public.bot_bindings (provider, provider_user_id);
