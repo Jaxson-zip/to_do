@@ -15,6 +15,7 @@ Thumbs.db
 # Logs and local tool output
 *.log
 .gstack/
+.worktrees/
 
 # TypeScript/Vite build cache
 *.tsbuildinfo
