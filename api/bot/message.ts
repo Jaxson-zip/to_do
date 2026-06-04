@@ -1,15 +1,15 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { parseBotIntent } from "../_bot/intent";
+import { parseBotIntent } from "../_bot/intent.js";
 import {
   formatCompletedReply,
   formatCreatedTaskReply,
   formatDeletedReply,
   formatTaskListReply,
-} from "../_bot/responses";
-import { findBestOpenTaskMatch, sortOpenTasksForBot } from "../_bot/taskMatcher";
-import { hasValidBotSecret, readJsonBody, requirePost, sendJson } from "../_bot/http";
-import { getSupabaseAdmin } from "../_bot/supabaseAdmin";
-import { dateKeyInBotTimeZone } from "../_bot/time";
+} from "../_bot/responses.js";
+import { findBestOpenTaskMatch, sortOpenTasksForBot } from "../_bot/taskMatcher.js";
+import { hasValidBotSecret, readJsonBody, requirePost, sendJson } from "../_bot/http.js";
+import { getSupabaseAdmin } from "../_bot/supabaseAdmin.js";
+import { dateKeyInBotTimeZone } from "../_bot/time.js";
 import {
   bindProviderUser,
   createTaskFromIntent,
@@ -18,7 +18,7 @@ import {
   markTaskDone,
   snoozeMostRecentReminder,
   softDeleteTask,
-} from "../_bot/todoRepository";
+} from "../_bot/todoRepository.js";
 
 type BotMessagePayload = {
   senderId?: string;

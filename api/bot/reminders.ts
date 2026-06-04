@@ -1,15 +1,15 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { formatTaskLine } from "../_bot/responses";
-import { hasValidBotSecret, readJsonBody, requirePost, sendJson } from "../_bot/http";
-import { sendClawBotMessage } from "../_bot/clawbot";
-import { getSupabaseAdmin } from "../_bot/supabaseAdmin";
+import { formatTaskLine } from "../_bot/responses.js";
+import { hasValidBotSecret, readJsonBody, requirePost, sendJson } from "../_bot/http.js";
+import { sendClawBotMessage } from "../_bot/clawbot.js";
+import { getSupabaseAdmin } from "../_bot/supabaseAdmin.js";
 import {
   claimReminderDelivery,
   fetchDueReminderTasks,
   getBotBindingByUserId,
   markReminderSent,
   releaseReminderClaim,
-} from "../_bot/todoRepository";
+} from "../_bot/todoRepository.js";
 
 type ReminderRequestPayload = {
   secret?: string;

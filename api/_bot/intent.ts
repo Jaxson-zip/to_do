@@ -1,4 +1,4 @@
-import { parseTaskInput } from "./taskInputParser";
+import { parseTaskInput } from "./taskInputParser.js";
 
 export type BotIntent =
   | { type: "bind"; code: string }

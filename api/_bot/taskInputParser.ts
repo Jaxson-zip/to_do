@@ -1,5 +1,5 @@
 import * as chrono from "chrono-node";
-import { getToday, toDateKey } from "./dateUtils";
+import { getToday, toDateKey } from "./dateUtils.js";
 
 export type ParsedTaskInput = {
   title: string;

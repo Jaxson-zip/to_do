@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getAuthorizationBearer, requirePost, sendJson } from "../_bot/http";
-import { getSupabaseAdmin } from "../_bot/supabaseAdmin";
+import { getAuthorizationBearer, requirePost, sendJson } from "../_bot/http.js";
+import { getSupabaseAdmin } from "../_bot/supabaseAdmin.js";
 
 export default async function handler(request: VercelRequest, response: VercelResponse): Promise<void> {
   if (!requirePost(request, response)) return;
