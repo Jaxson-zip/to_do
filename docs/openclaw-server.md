@@ -1,51 +1,100 @@
-# OpenClaw WeChat Server Deployment
+# OpenClaw 微信机器人服务器部署流程
 
-This is the server version of the WeChat todo bot. It does not require your
-personal computer to stay on.
+这份文档是项目的完整上线流程：网站继续放在 Vercel，数据继续放在
+Supabase，微信通道放在一台云服务器上。你的个人电脑不需要一直开着。
 
-## Why Not Use Your Main WeChat
+## 先看结论
 
-Use a dedicated WeChat account for the bot when possible.
+除了“服务器部署 OpenClaw”，还必须准备这些东西：
 
-- The OpenClaw WeChat plugin is not the same as the official WeChat Official Account API. Long-running automation can trigger WeChat risk checks.
-- The server holds the WeChat login session. If the server is compromised, the bot WeChat account is exposed.
-- A bot can accidentally reply too often, reply in the wrong chat, or send reminder text that you do not want mixed with your main social account.
-- A dedicated account is easier to reset, replace, or disable during demos.
+- 一台长期在线的 Ubuntu 云服务器。
+- 一个专门微信号，用来扫码登录机器人微信。
+- Vercel 生产环境变量，尤其是 `SUPABASE_SERVICE_ROLE_KEY` 和 `BOT_WEBHOOK_SECRET`。
+- Supabase 数据库执行最新版 `supabase-schema.sql`。
+- 服务器上的 `/etc/todo-openclaw.env`，里面放 Supabase 服务密钥和 Todo bot secret。
+- OpenClaw 微信插件扫码成功，并且 `openclaw-weixin/default` 账号保持在线。
+- OpenClaw inbound hook：收到微信消息后调用 Todo API。
+- systemd timer：每分钟扫描一次到期提醒，再通过 OpenClaw 发微信。
+- 网站账号和微信账号之间的绑定码。
 
-Your main account can work technically, but it is a bad blast-radius trade-off.
+不需要这些东西：
 
-## Architecture
+- 不需要把你电脑开着。
+- 不需要公众号。
+- 不需要给 OpenClaw 暴露公网端口。
+- 不需要 `CLAWBOT_SEND_MESSAGE_URL`，服务器版提醒由 `server/openclaw/reminder-worker.mjs` 直接发。
+
+## 为什么不建议主微信
+
+主微信不是技术上不能用，而是不建议。
+
+- OpenClaw 微信插件不是微信公众号官方 API，长期自动化可能触发微信风控。
+- 服务器会保存微信登录态。服务器出问题时，专门微信号的损失更小。
+- 机器人可能误回复、误发提醒，专门微信号更容易隔离。
+- 演示时专门微信号更干净，后续换号也简单。
+
+## 架构
 
 ```text
-WeChat message
-  -> OpenClaw on cloud server
-  -> server/openclaw/todo-wechat-hook
+微信消息
+  -> 云服务器 OpenClaw 微信插件
+  -> ~/.openclaw/hooks/todo-wechat
   -> https://todo-theta-mauve-75.vercel.app/api/bot/message
   -> Supabase memo_items / bot_bindings
-  -> hook reply goes back to WeChat
+  -> hook 把 API reply 回发微信
 
-systemd timer every minute
+systemd 每分钟
   -> server/openclaw/reminder-worker.mjs
-  -> Supabase due reminder query
+  -> Supabase 查询到期 reminder_at
   -> openclaw message send
-  -> WeChat reminder
+  -> 微信提醒
 ```
 
-The server needs OpenClaw because it owns the WeChat session. Vercel remains the
-public Todo API, and Supabase remains the database.
+## 项目里已经准备好的文件
 
-## Files Already Prepared
+- `api/bot/message.ts`: 微信文本指令入口。
+- `api/bot/binding-code.ts`: 网站登录后生成微信绑定码。
+- `server/openclaw/todo-wechat-hook/`: OpenClaw 收消息 hook。
+- `server/openclaw/reminder-worker.mjs`: 服务器提醒扫描和发送脚本。
+- `server/openclaw/systemd/`: systemd 每分钟定时器模板。
+- `server/openclaw/todo-openclaw.env.example`: 服务器环境变量模板。
 
-- `api/bot/message.ts`: handles inbound bot commands.
-- `api/bot/binding-code.ts`: creates a short-lived website binding code.
-- `server/openclaw/todo-wechat-hook/`: OpenClaw inbound message hook.
-- `server/openclaw/reminder-worker.mjs`: server-side reminder scanner/sender.
-- `server/openclaw/systemd/`: timer templates for one reminder scan per minute.
-- `server/openclaw/todo-openclaw.env.example`: server env template.
+## 阶段 0: 本地项目状态检查
 
-## Required Values
+在本地项目里确认最新代码已经推上 GitHub：
 
-Vercel environment variables:
+```powershell
+git status --short --branch
+git log -1 --oneline
+```
+
+生产站确认能打开：
+
+```powershell
+Invoke-WebRequest -UseBasicParsing https://todo-theta-mauve-75.vercel.app
+```
+
+## 阶段 1: Supabase 准备
+
+在 Supabase SQL Editor 里执行项目根目录的 `supabase-schema.sql`。
+
+它会创建或补齐：
+
+- `memo_items.reminder_at`
+- `bot_bindings`
+- `bot_binding_codes`
+- `bot_reminder_events`
+- `consume_bot_binding_code` RPC
+- 提醒扫描和绑定查询索引
+
+还需要从 Supabase 控制台拿两个值：
+
+- Project URL：形如 `https://xxxx.supabase.co`
+- Service role key：只给 Vercel/server 用，不放浏览器、不截图、不提交。
+
+## 阶段 2: Vercel 环境变量
+
+Vercel 项目需要这些生产环境变量：
 
 ```env
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
@@ -55,7 +104,95 @@ BOT_WEBHOOK_SECRET=choose-a-long-random-secret
 BOT_TIME_ZONE=Asia/Shanghai
 ```
 
-OpenClaw server environment file, usually `/etc/todo-openclaw.env`:
+服务器版不需要在 Vercel 配：
+
+```env
+CLAWBOT_SEND_MESSAGE_URL=
+CLAWBOT_SEND_MESSAGE_TOKEN=
+```
+
+配完后重新部署一次生产环境：
+
+```powershell
+npx.cmd vercel deploy --prod --yes
+```
+
+验证 API 没带密钥时必须返回 `401`：
+
+```powershell
+try {
+  Invoke-RestMethod `
+    -Method Post `
+    -Uri "https://todo-theta-mauve-75.vercel.app/api/bot/message" `
+    -ContentType "application/json" `
+    -Body '{"senderId":"health","text":"任务列表"}'
+} catch {
+  $_.Exception.Response.StatusCode.value__
+}
+```
+
+## 阶段 3: 云服务器基础环境
+
+推荐 Ubuntu 22.04 或 24.04。服务器只需要出站访问互联网，入站只开 SSH 就行。
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl git build-essential
+```
+
+OpenClaw 官方要求 Node 24，或 Node 22.19+。不要只用 Ubuntu 默认
+`apt install nodejs`，很多镜像里的版本太旧。推荐用官方安装脚本：
+
+```bash
+curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard
+```
+
+确认命令存在：
+
+```bash
+node -v
+npm -v
+openclaw --version
+command -v node
+command -v openclaw
+```
+
+如果 `openclaw` 不在 PATH，把全局 npm bin 加进 shell：
+
+```bash
+export PATH="$(npm prefix -g)/bin:$PATH"
+```
+
+## 阶段 4: 拉项目代码
+
+```bash
+sudo mkdir -p /opt
+cd /opt
+sudo git clone https://github.com/Jaxson-zip/to_do.git
+sudo chown -R "$USER":"$USER" /opt/to_do
+cd /opt/to_do
+npm ci
+npm run build
+```
+
+如果以后更新代码：
+
+```bash
+cd /opt/to_do
+git pull
+npm ci
+npm run build
+```
+
+## 阶段 5: 创建服务器环境变量
+
+```bash
+sudo cp /opt/to_do/server/openclaw/todo-openclaw.env.example /etc/todo-openclaw.env
+sudo nano /etc/todo-openclaw.env
+sudo chmod 600 /etc/todo-openclaw.env
+```
+
+至少填这些：
 
 ```env
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
@@ -66,159 +203,307 @@ TODO_BOT_SECRET=use-the-same-value-as-vercel-BOT_WEBHOOK_SECRET
 TODO_BOT_ALLOWED_CHANNELS=openclaw-weixin
 OPENCLAW_CHANNEL=openclaw-weixin
 OPENCLAW_ACCOUNT=default
-OPENCLAW_BIN=/usr/local/bin/openclaw
+OPENCLAW_BIN=/path/from-command-v-openclaw
+TODO_REMINDER_LIMIT=50
+TODO_REMINDER_DRY_RUN=0
 ```
 
-Do not commit real service-role keys or bot secrets.
-
-## Database
-
-Run `supabase-schema.sql` in Supabase SQL Editor after the bot changes are
-deployed. It adds:
-
-- `bot_bindings`
-- `bot_binding_codes`
-- `bot_reminder_events`
-- the `consume_bot_binding_code` RPC
-- reminder indexes and claim fields
-
-## Server Setup Outline
-
-Use Ubuntu unless you have a strong reason not to.
+`OPENCLAW_BIN` 用这个命令查：
 
 ```bash
-sudo apt update
-sudo apt install -y git nodejs npm
-sudo npm install -g openclaw
-
-sudo mkdir -p /opt
-cd /opt
-sudo git clone https://github.com/Jaxson-zip/to_do.git
-sudo chown -R "$USER":"$USER" /opt/to_do
-cd /opt/to_do
-npm ci
+command -v openclaw
 ```
 
-Install the WeChat plugin on the server:
+如果 `command -v node` 不是 `/usr/bin/node`，后面安装 timer 前要改
+`server/openclaw/systemd/todo-openclaw-reminders.service` 里的 `ExecStart`。
+
+## 阶段 6: 安装微信插件并扫码
 
 ```bash
 npx -y @tencent-weixin/openclaw-weixin-cli@latest install
+openclaw plugins list
 ```
 
-Configure and start the OpenClaw gateway, then login the WeChat channel:
+配置本地 gateway。这里的 `loopback` 表示不对公网开放 OpenClaw 端口。
 
 ```bash
 openclaw config set gateway.mode local
 openclaw config set gateway.bind loopback
 openclaw config set gateway.auth.mode token
 openclaw config set gateway.auth.token "$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+openclaw config validate
+```
+
+安装并启动 gateway：
+
+```bash
 openclaw gateway install --force
 openclaw gateway start
+openclaw gateway status
+```
+
+扫码登录专门微信号：
+
+```bash
 openclaw channels login --channel openclaw-weixin --account default --verbose
 openclaw channels status --deep
 ```
 
-Install the Todo hook into OpenClaw's hook directory:
+期望看到 `openclaw-weixin ... running`。
+
+## 阶段 7: 安装并启用 Todo hook
+
+安装 hook 文件：
 
 ```bash
 mkdir -p ~/.openclaw/hooks/todo-wechat
 cp -r /opt/to_do/server/openclaw/todo-wechat-hook/* ~/.openclaw/hooks/todo-wechat/
+ls -la ~/.openclaw/hooks/todo-wechat/
 ```
 
-Make sure the OpenClaw gateway process receives the env values from
-`/etc/todo-openclaw.env`. If OpenClaw installed a systemd service, find it with:
+目录里必须有：
+
+```text
+HOOK.md
+handler.ts
+```
+
+让 OpenClaw 发现并启用这个 hook：
 
 ```bash
-systemctl list-units '*openclaw*'
+openclaw hooks enable todo-wechat
+openclaw hooks list --verbose
+openclaw hooks info todo-wechat
 ```
 
-Then add an override:
+`todo-wechat` 需要读 `/etc/todo-openclaw.env` 里的变量。先确认 OpenClaw
+gateway 是系统级服务还是用户级服务：
 
 ```bash
-sudo systemctl edit <openclaw-service-name>
+systemctl list-units '*openclaw*' --all
+systemctl --user list-units '*openclaw*' --all
 ```
 
-Use:
+如果是用户级服务：
+
+```bash
+systemctl --user edit <openclaw-service-name>
+```
+
+填入：
 
 ```ini
 [Service]
 EnvironmentFile=/etc/todo-openclaw.env
 ```
 
-Reload and restart:
+然后重启：
+
+```bash
+systemctl --user daemon-reload
+systemctl --user restart <openclaw-service-name>
+openclaw gateway status
+```
+
+如果是系统级服务：
+
+```bash
+sudo systemctl edit <openclaw-service-name>
+```
+
+填入同样内容：
+
+```ini
+[Service]
+EnvironmentFile=/etc/todo-openclaw.env
+```
+
+然后重启：
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl restart <openclaw-service-name>
-openclaw hooks list --verbose
+openclaw gateway status
 ```
 
-If the gateway is running as a user service or a shell process instead, export
-the same environment variables before starting it.
-
-## Reminder Timer
-
-Create the server env file:
+如果你暂时不确定服务名，也可以先手动带环境启动测试：
 
 ```bash
-sudo cp /opt/to_do/server/openclaw/todo-openclaw.env.example /etc/todo-openclaw.env
-sudo nano /etc/todo-openclaw.env
-sudo chmod 600 /etc/todo-openclaw.env
+set -a
+. /etc/todo-openclaw.env
+set +a
+openclaw gateway restart
+openclaw hooks check
 ```
 
-Install the timer:
+## 阶段 8: 安装提醒定时器
+
+复制 systemd timer：
 
 ```bash
 sudo cp /opt/to_do/server/openclaw/systemd/todo-openclaw-reminders.service /etc/systemd/system/
 sudo cp /opt/to_do/server/openclaw/systemd/todo-openclaw-reminders.timer /etc/systemd/system/
+```
+
+如果 `command -v node` 不是 `/usr/bin/node`，先编辑 service：
+
+```bash
+sudo nano /etc/systemd/system/todo-openclaw-reminders.service
+```
+
+启用 timer：
+
+```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now todo-openclaw-reminders.timer
 ```
 
-Check it:
+检查：
 
 ```bash
 systemctl list-timers '*todo-openclaw*'
 journalctl -u todo-openclaw-reminders.service -n 80 --no-pager
 ```
 
-Manual dry run:
+手动 dry run，不真正发微信：
 
 ```bash
 cd /opt/to_do
-TODO_REMINDER_DRY_RUN=1 node server/openclaw/reminder-worker.mjs
+sudo bash -lc '
+  set -a
+  . /etc/todo-openclaw.env
+  set +a
+  export TODO_REMINDER_DRY_RUN=1
+  cd /opt/to_do
+  node server/openclaw/reminder-worker.mjs
+'
 ```
 
-## Binding Flow
+如果 dry run 输出类似下面，说明脚本和 Supabase 通了：
 
-1. Login to the website.
-2. Open the sync panel.
-3. Click `生成绑定码`.
-4. Send the generated text in WeChat, for example:
+```json
+{"checked":0,"sent":0,"skipped":0,"failed":0,"details":[]}
+```
+
+## 阶段 9: 绑定网站账号和微信账号
+
+1. 打开网站并登录。
+2. 打开同步面板。
+3. 点击 `生成绑定码`。
+4. 在专门微信号聊天里发送生成的指令，例如：
 
 ```text
 绑定 TD-1234567890
 ```
 
-After that, messages from that WeChat chat write to the same Supabase user.
+绑定成功后，这个微信会话的 sender id 会写进 `bot_bindings`。后续微信消息会写到同一个 Supabase 用户名下。
 
-## Test Commands
+## 阶段 10: 端到端测试
 
-Send in WeChat:
+在微信里发：
 
 ```text
-明天上午10点交作业，提前30分钟提醒
 任务列表
 今天有什么
+明天上午10点交作业，提前30分钟提醒
 完成 交作业
-稍后10分钟提醒
 ```
 
-The first real message after binding is important: it gives the system a stable
-OpenClaw sender id that proactive reminders can target later.
+在网站里同步，看任务是否出现。
 
-## References
+再测提醒：
 
-- OpenClaw hooks use `HOOK.md` plus `handler.ts`, and `message:received` events can push replies through `event.messages.push(...)`: https://docs.openclaw.ai/automation/hooks
-- OpenClaw CLI message send/read reference: https://docs.openclaw.ai/cli/message
-- OpenClaw directory limitations depend on channel plugin support: https://docs.openclaw.ai/cli/directory
+1. 在微信发一个几分钟后提醒的任务。
+2. 看 timer 日志：
+
+```bash
+journalctl -u todo-openclaw-reminders.service -f
+```
+
+3. 到点后微信应该收到提醒。
+
+## 常见问题
+
+### Hook 没有触发
+
+```bash
+openclaw hooks list --verbose
+openclaw hooks info todo-wechat
+openclaw hooks check
+openclaw gateway status
+```
+
+确认：
+
+- `~/.openclaw/hooks/todo-wechat/HOOK.md` 存在。
+- `~/.openclaw/hooks/todo-wechat/handler.ts` 存在。
+- 已执行 `openclaw hooks enable todo-wechat`。
+- gateway 重启后能读到 `/etc/todo-openclaw.env`。
+
+### 微信插件没在线
+
+```bash
+openclaw channels status --deep
+openclaw gateway status
+```
+
+如果显示没登录，重新扫码：
+
+```bash
+openclaw channels login --channel openclaw-weixin --account default --verbose
+```
+
+### 提醒没有发
+
+先看日志：
+
+```bash
+journalctl -u todo-openclaw-reminders.service -n 120 --no-pager
+```
+
+常见原因：
+
+- 没有绑定微信，`bot_bindings` 为空。
+- 任务没有 `reminder_at`。
+- timer 没启动。
+- `OPENCLAW_BIN` 路径不对。
+- `SUPABASE_SERVICE_ROLE_KEY` 没填或填错。
+
+### API 返回 401
+
+`TODO_BOT_SECRET` 必须和 Vercel 的 `BOT_WEBHOOK_SECRET` 完全一致。
+
+### API 返回 500
+
+常见是 Vercel 没有 `SUPABASE_SERVICE_ROLE_KEY`，或者 Supabase 还没执行最新版 SQL。
+
+## 更新流程
+
+代码更新后在服务器执行：
+
+```bash
+cd /opt/to_do
+git pull
+npm ci
+npm run build
+cp -r server/openclaw/todo-wechat-hook/* ~/.openclaw/hooks/todo-wechat/
+openclaw hooks enable todo-wechat
+openclaw gateway restart
+sudo systemctl restart todo-openclaw-reminders.timer
+```
+
+如果改了 systemd service 或 timer：
+
+```bash
+sudo cp server/openclaw/systemd/todo-openclaw-reminders.service /etc/systemd/system/
+sudo cp server/openclaw/systemd/todo-openclaw-reminders.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl restart todo-openclaw-reminders.timer
+```
+
+## 官方参考
+
+- OpenClaw 安装要求和安装脚本：https://docs.openclaw.ai/install
+- OpenClaw personal assistant 安全建议：https://docs.openclaw.ai/start/openclaw
+- OpenClaw hooks 结构、`message:received`、`event.messages`：https://docs.openclaw.ai/automation/hooks
+- OpenClaw `message send` 命令：https://docs.openclaw.ai/cli/message

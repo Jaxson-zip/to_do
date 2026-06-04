@@ -76,6 +76,21 @@ https://your-project.vercel.app
 
 7. iPhone Safari 打开 Vercel 地址，分享按钮里选择“添加到主屏幕”。
 
+## 微信机器人
+
+项目已经准备好服务器版 OpenClaw 微信机器人流程：
+
+- 网站登录后可在同步面板点击“生成绑定码”。
+- 微信发 `绑定 TD-xxxxxxxxxx` 后，微信会话会绑定到当前 Todo 账号。
+- 微信可发 `任务列表`、`今天有什么`、`完成 xxx`、`删除 xxx`、`明天10点提醒我xxx`。
+- 云服务器上的定时器每分钟扫描提醒，到点后通过 OpenClaw 发回微信。
+
+完整服务器安装和上线流程见：
+
+```text
+docs/openclaw-server.md
+```
+
 ## 构建检查
 
 ```powershell

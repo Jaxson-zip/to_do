@@ -23,10 +23,13 @@ VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 BOT_WEBHOOK_SECRET=choose-a-long-random-secret
-CLAWBOT_SEND_MESSAGE_URL=https://clawbot.example/send-message
-CLAWBOT_SEND_MESSAGE_TOKEN=your-clawbot-send-token
 BOT_TIME_ZONE=Asia/Shanghai
 ```
+
+`CLAWBOT_SEND_MESSAGE_URL` and `CLAWBOT_SEND_MESSAGE_TOKEN` are only needed for
+a public ClawBot-compatible send API. The OpenClaw server setup in
+`docs/openclaw-server.md` sends reminders from the server and can leave them
+blank.
 
 `SUPABASE_SERVICE_ROLE_KEY` is server-only. Never put it in frontend code or screenshots.
 
@@ -230,4 +233,4 @@ Invoke-RestMethod `
 
 - The exact ClawBot send-message payload may need one small adjustment after you see the real ClawBot configuration page. The current helper sends common fields: `to`, `userId`, `recipientId`, `text`, and `message`.
 - The incoming webhook is intentionally flexible so most ClawBot payload shapes work without code changes.
-- The website does not yet show a "Generate WeChat binding code" button. The backend endpoint is ready; adding the small UI is a separate polish step.
+- The website sync panel now has a `生成绑定码` button for the WeChat binding flow.
