@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { formatTaskLine } from "../../src/bot/responses";
+import { formatTaskLine } from "../_bot/responses";
 import { hasValidBotSecret, readJsonBody, requirePost, sendJson } from "../_bot/http";
 import { sendClawBotMessage } from "../_bot/clawbot";
 import { getSupabaseAdmin } from "../_bot/supabaseAdmin";

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { BotIntent } from "../../src/bot/intent";
-import type { MemoItem } from "../../src/types";
+import type { BotIntent } from "./intent";
+import type { MemoItem } from "./types";
 
 export type MemoItemRow = {
   id: string;

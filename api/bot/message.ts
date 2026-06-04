@@ -1,12 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { parseBotIntent } from "../../src/bot/intent";
+import { parseBotIntent } from "../_bot/intent";
 import {
   formatCompletedReply,
   formatCreatedTaskReply,
   formatDeletedReply,
   formatTaskListReply,
-} from "../../src/bot/responses";
-import { findBestOpenTaskMatch, sortOpenTasksForBot } from "../../src/bot/taskMatcher";
+} from "../_bot/responses";
+import { findBestOpenTaskMatch, sortOpenTasksForBot } from "../_bot/taskMatcher";
 import { hasValidBotSecret, readJsonBody, requirePost, sendJson } from "../_bot/http";
 import { getSupabaseAdmin } from "../_bot/supabaseAdmin";
 import { dateKeyInBotTimeZone } from "../_bot/time";
