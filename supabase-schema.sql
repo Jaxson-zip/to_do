@@ -1,3 +1,5 @@
+create extension if not exists pgcrypto;
+
 create table if not exists public.memo_lists (
   id uuid primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
