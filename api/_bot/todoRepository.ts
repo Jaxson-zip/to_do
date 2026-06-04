@@ -29,6 +29,21 @@ export type BotBindingRow = {
   user_id: string;
 };
 
+export type BotReminderEventRow = {
+  id: string;
+  item_id: string;
+  user_id: string;
+  provider: "clawbot";
+  provider_user_id: string;
+  reminder_at: string;
+  sent_at: string | null;
+  snoozed_until: string | null;
+};
+
+export type MemoItemWithUserId = MemoItem & {
+  userId: string;
+};
+
 export type BindingCodeRow = {
   code: string;
   user_id: string;
@@ -108,6 +123,27 @@ export async function fetchOpenTasks(supabase: SupabaseClient, userId: string, l
   return ((data ?? []) as MemoItemRow[]).map(memoItemFromRow);
 }
 
+export async function fetchDueReminderTasks(
+  supabase: SupabaseClient,
+  nowIso: string,
+  limit = 50
+): Promise<MemoItemWithUserId[]> {
+  const { data, error } = await supabase
+    .from("memo_items")
+    .select("*")
+    .eq("kind", "task")
+    .eq("status", "open")
+    .eq("archived", false)
+    .is("deleted_at", null)
+    .not("reminder_at", "is", null)
+    .lte("reminder_at", nowIso)
+    .order("reminder_at", { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+  return ((data ?? []) as MemoItemRow[]).map((row) => ({ ...memoItemFromRow(row), userId: row.user_id }));
+}
+
 export async function getBotBinding(supabase: SupabaseClient, providerUserId: string): Promise<BotBindingRow | null> {
   const { data, error } = await supabase
     .from("bot_bindings")
@@ -118,6 +154,57 @@ export async function getBotBinding(supabase: SupabaseClient, providerUserId: st
 
   if (error) throw error;
   return (data as BotBindingRow | null) ?? null;
+}
+
+export async function getBotBindingByUserId(supabase: SupabaseClient, userId: string): Promise<BotBindingRow | null> {
+  const { data, error } = await supabase
+    .from("bot_bindings")
+    .select("provider, provider_user_id, user_id")
+    .eq("provider", "clawbot")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as BotBindingRow | null) ?? null;
+}
+
+export async function getReminderEvent(
+  supabase: SupabaseClient,
+  itemId: string,
+  reminderAt: string
+): Promise<BotReminderEventRow | null> {
+  const { data, error } = await supabase
+    .from("bot_reminder_events")
+    .select("*")
+    .eq("provider", "clawbot")
+    .eq("item_id", itemId)
+    .eq("reminder_at", reminderAt)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as BotReminderEventRow | null) ?? null;
+}
+
+export async function markReminderSent(
+  supabase: SupabaseClient,
+  item: MemoItem,
+  binding: BotBindingRow,
+  sentAt: string
+): Promise<void> {
+  if (!item.reminderAt) return;
+
+  const { error } = await supabase.from("bot_reminder_events").upsert(
+    {
+      item_id: item.id,
+      user_id: binding.user_id,
+      provider: "clawbot",
+      provider_user_id: binding.provider_user_id,
+      reminder_at: item.reminderAt,
+      sent_at: sentAt,
+    },
+    { onConflict: "item_id,provider,reminder_at" }
+  );
+  if (error) throw error;
 }
 
 export async function bindProviderUser(
@@ -215,4 +302,3 @@ export async function snoozeMostRecentReminder(
 
   return memoItemFromRow(updated as MemoItemRow);
 }
-
