@@ -56,6 +56,12 @@ export type CloudStats = {
   fetchedAt: string;
 };
 
+export type BotBindingCode = {
+  code: string;
+  expiresAt: string;
+  instruction: string;
+};
+
 export async function getSession(): Promise<Session | null> {
   if (!supabase) return null;
   const { data, error } = await supabase.auth.getSession();
@@ -93,6 +99,23 @@ export async function signOut(): Promise<void> {
   if (!supabase) return;
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+}
+
+export async function createBotBindingCode(accessToken: string): Promise<BotBindingCode> {
+  const response = await fetch("/api/bot/binding-code", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const payload = (await response.json().catch(() => ({}))) as Partial<BotBindingCode> & { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "生成绑定码失败");
+  if (!payload.code || !payload.expiresAt || !payload.instruction) throw new Error("绑定码响应不完整");
+  return {
+    code: payload.code,
+    expiresAt: payload.expiresAt,
+    instruction: payload.instruction,
+  };
 }
 
 export async function syncWithCloud(

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && tsc -p tsconfig.api.json && vite build",
+    "bot:openclaw:reminders": "node server/openclaw/reminder-worker.mjs",
     "test": "vitest run",
     "preview": "vite preview --host 0.0.0.0"
   },

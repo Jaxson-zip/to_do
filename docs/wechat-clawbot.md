@@ -2,6 +2,11 @@
 
 This project now has server-side bot endpoints for a ClawBot-style WeChat assistant.
 
+For the cloud-server OpenClaw setup that does not require your PC to stay on,
+see `docs/openclaw-server.md`. That setup uses the inbound message endpoint
+below, but sends proactive reminders from the cloud server through
+`server/openclaw/reminder-worker.mjs`.
+
 ## What It Can Do
 
 - Bind a ClawBot sender id to a Supabase todo account.

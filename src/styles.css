@@ -629,6 +629,55 @@ svg {
   font-size: 11px;
 }
 
+.wechat-binding {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.wechat-binding div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wechat-binding span {
+  color: #9a9a9a;
+  font-size: 11px;
+}
+
+.wechat-binding strong {
+  overflow-wrap: anywhere;
+  color: #333;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wechat-binding button {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: #fff;
+  color: #555;
+  font-size: 12px;
+}
+
+.wechat-binding button:disabled {
+  color: #aaa;
+  background: #f8f8f8;
+}
+
+.wechat-binding p {
+  grid-column: 1 / -1;
+  color: #777;
+  font-size: 11px;
+}
+
 .error-text {
   color: var(--red);
 }

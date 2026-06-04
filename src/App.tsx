@@ -15,6 +15,7 @@ import {
   saveLists,
 } from "./storage";
 import {
+  createBotBindingCode,
   fetchCloudStats,
   getSession,
   isSupabaseConfigured,
@@ -2320,6 +2321,22 @@ function SyncBox({
 }) {
   const status = getSyncStatus(session, syncing, pendingSync, syncError, lastSyncedAt);
   const showEmailConfirmHelp = isEmailConfirmIssue(authMessage) || isEmailConfirmIssue(syncError);
+  const [bindingCode, setBindingCode] = useState<{ code: string; instruction: string; expiresAt: string } | null>(null);
+  const [bindingCodeLoading, setBindingCodeLoading] = useState(false);
+  const [bindingCodeError, setBindingCodeError] = useState<string | null>(null);
+
+  async function generateBindingCode(): Promise<void> {
+    if (!session?.access_token) return;
+    setBindingCodeLoading(true);
+    setBindingCodeError(null);
+    try {
+      setBindingCode(await createBotBindingCode(session.access_token));
+    } catch (error) {
+      setBindingCodeError(error instanceof Error ? error.message : "生成绑定码失败");
+    } finally {
+      setBindingCodeLoading(false);
+    }
+  }
 
   return (
     <section className="sync-box" aria-label="同步">
@@ -2401,6 +2418,26 @@ function SyncBox({
             更新应用
           </button>
           {cloudStats?.fetchedAt && <p>统计读取于 {formatDateTime(cloudStats.fetchedAt)}</p>}
+        </div>
+      )}
+
+      {isSupabaseConfigured && session && (
+        <div className="wechat-binding">
+          <div>
+            <span>微信绑定</span>
+            <strong>{bindingCode?.code ?? "未生成"}</strong>
+          </div>
+          <button type="button" onClick={() => void generateBindingCode()} disabled={bindingCodeLoading}>
+            {bindingCodeLoading ? "生成中" : "生成绑定码"}
+          </button>
+          {bindingCode && (
+            <p>
+              {bindingCode.instruction}
+              <br />
+              {formatDateTime(bindingCode.expiresAt)} 前有效
+            </p>
+          )}
+          {bindingCodeError && <p className="error-text">{bindingCodeError}</p>}
         </div>
       )}
 
