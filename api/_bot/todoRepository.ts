@@ -290,9 +290,14 @@ export async function snoozeMostRecentReminder(
     .update({ reminder_at: reminderAt, updated_at: updatedAt })
     .eq("user_id", userId)
     .eq("id", reminder.item_id)
+    .eq("kind", "task")
+    .eq("status", "open")
+    .eq("archived", false)
+    .is("deleted_at", null)
     .select("*")
-    .single();
+    .maybeSingle();
   if (updateItemError) throw updateItemError;
+  if (!updated) return null;
 
   const { error: updateReminderError } = await supabase
     .from("bot_reminder_events")

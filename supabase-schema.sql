@@ -86,6 +86,9 @@ add constraint memo_items_status_check check (status in ('open', 'done', 'purged
 
 alter table public.memo_items enable row level security;
 alter table public.memo_lists enable row level security;
+alter table public.bot_bindings enable row level security;
+alter table public.bot_binding_codes enable row level security;
+alter table public.bot_reminder_events enable row level security;
 
 drop policy if exists "Users can read their own memo lists" on public.memo_lists;
 create policy "Users can read their own memo lists"
@@ -127,6 +130,21 @@ with check (auth.uid() = user_id);
 drop policy if exists "Users can delete their own memo items" on public.memo_items;
 create policy "Users can delete their own memo items"
 on public.memo_items for delete
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can read their own bot bindings" on public.bot_bindings;
+create policy "Users can read their own bot bindings"
+on public.bot_bindings for select
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can read their own bot binding codes" on public.bot_binding_codes;
+create policy "Users can read their own bot binding codes"
+on public.bot_binding_codes for select
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can read their own bot reminder events" on public.bot_reminder_events;
+create policy "Users can read their own bot reminder events"
+on public.bot_reminder_events for select
 using (auth.uid() = user_id);
 
 create index if not exists memo_items_user_updated_idx
