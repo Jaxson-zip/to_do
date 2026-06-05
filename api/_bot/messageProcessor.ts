@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseBotIntent, type BotIntent } from "./intent.js";
+import { parseIntentWithLLM } from "./llmParser.js";
 import {
   formatCompletedReply,
   formatCreatedNoteReply,
@@ -33,7 +34,15 @@ export async function handleBoundBotText(
   text: string,
   options?: BotProcessorOptions
 ): Promise<string> {
-  return handleBoundIntent(supabase, userId, senderId, parseBotIntent(text), options);
+  const openTasks = await fetchOpenTasks(supabase, userId, 5);
+  const recentTasksContext = openTasks.map((t) => ({ id: t.id, title: t.title }));
+  
+  let intent = await parseIntentWithLLM(text, new Date(), recentTasksContext);
+  if (!intent) {
+    intent = parseBotIntent(text);
+  }
+
+  return handleBoundIntent(supabase, userId, senderId, intent, options);
 }
 
 export async function handleBoundIntent(
