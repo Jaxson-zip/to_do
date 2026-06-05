@@ -24,16 +24,18 @@ export type MemoItemRow = {
 };
 
 export type BotBindingRow = {
-  provider: "clawbot";
+  provider: BotProvider;
   provider_user_id: string;
   user_id: string;
 };
+
+export type BotProvider = "clawbot" | "ilink";
 
 export type BotReminderEventRow = {
   id: string;
   item_id: string;
   user_id: string;
-  provider: "clawbot";
+  provider: BotProvider;
   provider_user_id: string;
   reminder_at: string;
   attempted_at: string | null;
@@ -179,12 +181,13 @@ export async function getBotBindingByUserId(supabase: SupabaseClient, userId: st
 export async function getReminderEvent(
   supabase: SupabaseClient,
   itemId: string,
-  reminderAt: string
+  reminderAt: string,
+  provider: BotProvider = "clawbot"
 ): Promise<BotReminderEventRow | null> {
   const { data, error } = await supabase
     .from("bot_reminder_events")
     .select("*")
-    .eq("provider", "clawbot")
+    .eq("provider", provider)
     .eq("item_id", itemId)
     .eq("reminder_at", reminderAt)
     .maybeSingle();
@@ -207,7 +210,7 @@ export async function claimReminderDelivery(
     {
       item_id: item.id,
       user_id: binding.user_id,
-      provider: "clawbot",
+      provider: binding.provider,
       provider_user_id: binding.provider_user_id,
       reminder_at: item.reminderAt,
       attempted_at: nowIso,
@@ -219,7 +222,7 @@ export async function claimReminderDelivery(
   if (!error) return { status: "claimed", token };
   if (error.code !== "23505") throw error;
 
-  const existing = await getReminderEvent(supabase, item.id, item.reminderAt);
+  const existing = await getReminderEvent(supabase, item.id, item.reminderAt, binding.provider);
   if (existing?.sent_at) return { status: "already_sent" };
   if (existing?.claim_expires_at && new Date(existing.claim_expires_at).getTime() > new Date(nowIso).getTime()) {
     return { status: "claimed_elsewhere" };
@@ -232,7 +235,7 @@ export async function claimReminderDelivery(
       claim_token: token,
       claim_expires_at: claimExpiresAt,
     })
-    .eq("provider", "clawbot")
+    .eq("provider", binding.provider)
     .eq("item_id", item.id)
     .eq("reminder_at", item.reminderAt)
     .is("sent_at", null);
@@ -252,7 +255,8 @@ export async function markReminderSent(
   supabase: SupabaseClient,
   item: MemoItem,
   claimToken: string,
-  sentAt: string
+  sentAt: string,
+  provider: BotProvider = "clawbot"
 ): Promise<boolean> {
   if (!item.reminderAt) return false;
 
@@ -263,7 +267,7 @@ export async function markReminderSent(
       claim_token: null,
       claim_expires_at: null,
     })
-    .eq("provider", "clawbot")
+    .eq("provider", provider)
     .eq("item_id", item.id)
     .eq("reminder_at", item.reminderAt)
     .eq("claim_token", claimToken)
@@ -274,7 +278,12 @@ export async function markReminderSent(
   return Boolean(data);
 }
 
-export async function releaseReminderClaim(supabase: SupabaseClient, item: MemoItem, claimToken: string): Promise<void> {
+export async function releaseReminderClaim(
+  supabase: SupabaseClient,
+  item: MemoItem,
+  claimToken: string,
+  provider: BotProvider = "clawbot"
+): Promise<void> {
   if (!item.reminderAt) return;
 
   const { error } = await supabase
@@ -283,7 +292,7 @@ export async function releaseReminderClaim(supabase: SupabaseClient, item: MemoI
       claim_token: null,
       claim_expires_at: null,
     })
-    .eq("provider", "clawbot")
+    .eq("provider", provider)
     .eq("item_id", item.id)
     .eq("reminder_at", item.reminderAt)
     .eq("claim_token", claimToken);
@@ -331,12 +340,13 @@ export async function snoozeMostRecentReminder(
   supabase: SupabaseClient,
   userId: string,
   providerUserId: string,
-  minutes: number
+  minutes: number,
+  provider: BotProvider = "clawbot"
 ): Promise<MemoItem | null> {
   const { data, error } = await supabase
     .from("bot_reminder_events")
     .select("id, item_id")
-    .eq("provider", "clawbot")
+    .eq("provider", provider)
     .eq("provider_user_id", providerUserId)
     .eq("user_id", userId)
     .not("sent_at", "is", null)

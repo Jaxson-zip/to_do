@@ -65,6 +65,25 @@ create table if not exists public.bot_reminder_events (
   unique (item_id, provider, reminder_at)
 );
 
+create table if not exists public.bot_ilink_connections (
+  id uuid primary key default gen_random_uuid(),
+  provider text not null default 'ilink' check (provider in ('ilink')),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  bot_token text not null,
+  base_url text not null,
+  get_updates_buf text not null default '',
+  wechat_uin text not null,
+  reply_to_user_id text,
+  context_token text,
+  context_updated_at timestamptz,
+  status text not null default 'connected' check (status in ('connected', 'error', 'disabled')),
+  last_error text,
+  connected_at timestamptz not null default now(),
+  last_polled_at timestamptz,
+  updated_at timestamptz not null default now(),
+  unique (provider, user_id)
+);
+
 alter table public.memo_items
 add column if not exists list_id uuid;
 
@@ -86,6 +105,27 @@ add column if not exists claim_token uuid;
 alter table public.bot_reminder_events
 add column if not exists claim_expires_at timestamptz;
 
+alter table public.bot_ilink_connections
+add column if not exists get_updates_buf text not null default '';
+
+alter table public.bot_ilink_connections
+add column if not exists reply_to_user_id text;
+
+alter table public.bot_ilink_connections
+add column if not exists context_token text;
+
+alter table public.bot_ilink_connections
+add column if not exists context_updated_at timestamptz;
+
+alter table public.bot_ilink_connections
+add column if not exists last_error text;
+
+alter table public.bot_ilink_connections
+add column if not exists last_polled_at timestamptz;
+
+alter table public.bot_ilink_connections
+add column if not exists updated_at timestamptz not null default now();
+
 alter table public.memo_items
 drop constraint if exists memo_items_repeat_rule_check;
 
@@ -98,11 +138,24 @@ drop constraint if exists memo_items_status_check;
 alter table public.memo_items
 add constraint memo_items_status_check check (status in ('open', 'done', 'purged'));
 
+alter table public.bot_reminder_events
+drop constraint if exists bot_reminder_events_provider_check;
+
+alter table public.bot_reminder_events
+add constraint bot_reminder_events_provider_check check (provider in ('clawbot', 'ilink'));
+
+alter table public.bot_ilink_connections
+drop constraint if exists bot_ilink_connections_status_check;
+
+alter table public.bot_ilink_connections
+add constraint bot_ilink_connections_status_check check (status in ('connected', 'error', 'disabled'));
+
 alter table public.memo_items enable row level security;
 alter table public.memo_lists enable row level security;
 alter table public.bot_bindings enable row level security;
 alter table public.bot_binding_codes enable row level security;
 alter table public.bot_reminder_events enable row level security;
+alter table public.bot_ilink_connections enable row level security;
 
 drop policy if exists "Users can read their own memo lists" on public.memo_lists;
 create policy "Users can read their own memo lists"
@@ -239,9 +292,18 @@ on public.bot_binding_codes (user_id, expires_at desc);
 create index if not exists bot_reminder_events_due_idx
 on public.bot_reminder_events (provider, sent_at, reminder_at);
 
+create index if not exists bot_ilink_connections_status_poll_idx
+on public.bot_ilink_connections (status, last_polled_at);
+
+create index if not exists bot_ilink_connections_user_idx
+on public.bot_ilink_connections (user_id);
+
 grant usage on schema public to authenticated;
+grant usage on schema public to service_role;
 grant select, insert, update, delete on public.memo_items to authenticated;
 grant select, insert, update, delete on public.memo_lists to authenticated;
 grant select, insert, update, delete on public.bot_bindings to authenticated;
 grant select, insert, update, delete on public.bot_binding_codes to authenticated;
 grant select, insert, update, delete on public.bot_reminder_events to authenticated;
+grant select, insert, update, delete on public.bot_ilink_connections to service_role;
+revoke all on public.bot_ilink_connections from authenticated;

@@ -1,17 +1,26 @@
-# OpenClaw 微信机器人服务器部署流程
+# 微信机器人服务器部署流程
 
 这份文档是项目的完整上线流程：网站继续放在 Vercel，数据继续放在
 Supabase，微信通道放在一台云服务器上。你的个人电脑不需要一直开着。
 
 ## 先看结论
 
-除了“服务器部署 OpenClaw”，还必须准备这些东西：
+现在有两条微信通道：
+
+- 推荐：网站同步面板 `扫码连接`，每个 Todo 用户自己扫码授权 iLink/ClawBot。
+- 备用：服务器登录一个专门微信号，OpenClaw hook 收消息，网站用绑定码关联账号。
+
+推荐扫码模式必须准备这些东西：
 
 - 一台长期在线的云服务器，Ubuntu 或阿里云 Alibaba Cloud Linux 都可以。
-- 一个专门微信号，用来扫码登录机器人微信。
 - Vercel 生产环境变量，尤其是 `SUPABASE_SERVICE_ROLE_KEY` 和 `BOT_WEBHOOK_SECRET`。
 - Supabase 数据库执行最新版 `supabase-schema.sql`。
-- 服务器上的 `/etc/todo-openclaw.env`，里面放 Supabase 服务密钥和 Todo bot secret。
+- 服务器上的 `/etc/todo-openclaw.env`，里面放 Supabase 服务密钥。
+- systemd timer：`todo-ilink-poller.timer` 每 15 秒拉取 iLink 消息，并扫描到期提醒。
+
+备用 OpenClaw 绑定码模式还需要：
+
+- 一个专门微信号，用来扫码登录机器人微信。
 - 服务器上的本地 Todo API 服务：`todo-openclaw-api.service`。
 - OpenClaw 微信插件扫码成功，并且 `openclaw-weixin/default` 账号保持在线。
 - OpenClaw inbound hook：收到微信消息后调用服务器本机 Todo API。
@@ -21,9 +30,9 @@ Supabase，微信通道放在一台云服务器上。你的个人电脑不需要
 不需要这些东西：
 
 - 不需要把你电脑开着。
-- 不需要公众号。
+- 推荐扫码模式不需要公众号，也不需要专门机器人微信号。
 - 不需要给 OpenClaw 暴露公网端口。
-- 不需要 `CLAWBOT_SEND_MESSAGE_URL`，服务器版提醒由 `server/openclaw/reminder-worker.mjs` 直接发。
+- 不需要 `CLAWBOT_SEND_MESSAGE_URL`；扫码模式由 `server/openclaw/ilink-worker.mjs` 发，备用 OpenClaw 模式由 `server/openclaw/reminder-worker.mjs` 发。
 
 ## 为什么不建议主微信
 
@@ -37,6 +46,18 @@ Supabase，微信通道放在一台云服务器上。你的个人电脑不需要
 ## 架构
 
 ```text
+推荐扫码模式：
+网站同步面板扫码
+  -> api/bot/ilink-qr / api/bot/ilink-status
+  -> Supabase bot_ilink_connections
+
+systemd 每 15 秒
+  -> server/openclaw/ilink-worker.mjs
+  -> iLink getupdates / sendmessage
+  -> Supabase memo_items / bot_ilink_connections / bot_reminder_events
+  -> 微信回复和提醒
+
+备用 OpenClaw 绑定码模式：
 微信消息
   -> 云服务器 OpenClaw 微信插件
   -> ~/.openclaw/hooks/todo-wechat
@@ -51,13 +72,16 @@ systemd 每分钟
   -> 微信提醒
 ```
 
-Vercel 仍然保留：它负责网站本身、登录、同步面板和“生成绑定码”。微信消息链路不依赖
-Vercel，因为部分国内云服务器访问 `vercel.app` 不稳定。
+Vercel 仍然保留：它负责网站本身、登录、同步面板、扫码连接 API 和“生成绑定码”备用入口。
 
 ## 项目里已经准备好的文件
 
 - `api/bot/message.ts`: 微信文本指令入口。
 - `api/bot/binding-code.ts`: 网站登录后生成微信绑定码。
+- `api/bot/ilink-qr.ts`: 网站登录后生成 iLink 扫码二维码。
+- `api/bot/ilink-status.ts`: 轮询扫码状态，成功后保存 iLink 授权。
+- `api/bot/ilink-connection.ts`: 读取或断开当前账号的 iLink 连接。
+- `server/openclaw/ilink-worker.mjs`: 扫描 iLink 消息和 iLink 到期提醒。
 - `server/openclaw/bot-api-server.mjs`: 服务器本地 Todo API，复用 `api/bot/*` 处理逻辑。
 - `server/openclaw/todo-wechat-hook/`: OpenClaw 收消息 hook。
 - `server/openclaw/reminder-worker.mjs`: 服务器提醒扫描和发送脚本。
@@ -89,6 +113,7 @@ Invoke-WebRequest -UseBasicParsing https://todo-theta-mauve-75.vercel.app
 - `bot_bindings`
 - `bot_binding_codes`
 - `bot_reminder_events`
+- `bot_ilink_connections`
 - `consume_bot_binding_code` RPC
 - 提醒扫描和绑定查询索引
 
@@ -222,6 +247,9 @@ OPENCLAW_ACCOUNT=default
 OPENCLAW_BIN=/path/from-command-v-openclaw
 TODO_REMINDER_LIMIT=50
 TODO_REMINDER_DRY_RUN=0
+TODO_ILINK_CONNECTION_LIMIT=50
+TODO_ILINK_REMINDER_LIMIT=50
+TODO_ILINK_DRY_RUN=0
 ```
 
 `OPENCLAW_BIN` 用这个命令查：
@@ -234,12 +262,46 @@ command -v openclaw
 `BOT_WEBHOOK_SECRET` 一样。本地 Todo API 启动时会把它映射成 handler 需要的
 `BOT_WEBHOOK_SECRET`。
 
-如果 `command -v node` 不是 `/usr/bin/node`，后面安装 timer 前要改
-`server/openclaw/systemd/todo-openclaw-reminders.service` 里的 `ExecStart`。
+如果 `command -v node` 不是 `/usr/bin/node`，后面安装 timer 前要改对应 service
+里的 `ExecStart`，例如 `todo-ilink-poller.service` 或 `todo-openclaw-reminders.service`。
+
+## 阶段 5.5: 安装推荐的 iLink 扫码轮询器
+
+这一步对应网站同步面板的 `扫码连接`，不需要在服务器登录专门微信号。
+
+```bash
+cd /opt/to_do
+npm run bot:build-api-runtime
+sudo cp /opt/to_do/server/openclaw/systemd/todo-ilink-poller.service /etc/systemd/system/
+sudo cp /opt/to_do/server/openclaw/systemd/todo-ilink-poller.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now todo-ilink-poller.timer
+```
+
+检查 timer：
+
+```bash
+systemctl list-timers '*todo-ilink*'
+journalctl -u todo-ilink-poller.service -n 80 --no-pager
+```
+
+手动 dry run：
+
+```bash
+cd /opt/to_do
+sudo bash -lc '
+  set -a
+  . /etc/todo-openclaw.env
+  set +a
+  export TODO_ILINK_DRY_RUN=1
+  cd /opt/to_do
+  node server/openclaw/ilink-worker.mjs
+'
+```
 
 ## 阶段 6: 启动本地 Todo API 服务
 
-这一步让 OpenClaw hook 调用本机 API，不经过 Vercel：
+这一步只给备用 OpenClaw 绑定码模式使用，让 OpenClaw hook 调用本机 API，不经过 Vercel：
 
 ```bash
 cd /opt/to_do

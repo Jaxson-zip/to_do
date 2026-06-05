@@ -15,7 +15,11 @@ import {
   saveLists,
 } from "./storage";
 import {
+  checkIlinkQrCode,
   createBotBindingCode,
+  createIlinkQrCode,
+  disconnectIlinkConnection,
+  fetchIlinkConnection,
   fetchCloudStats,
   getSession,
   isSupabaseConfigured,
@@ -28,6 +32,9 @@ import {
   sortItems,
   syncWithCloud,
   type CloudStats,
+  type IlinkConnection,
+  type IlinkQrCode,
+  type IlinkQrStatus,
 } from "./supabase";
 import { isDemoItemTitle } from "./demoItems";
 import type { DraftItem, MemoItem, MemoList, Priority, RepeatRule, ViewFilter } from "./types";
@@ -2324,6 +2331,88 @@ function SyncBox({
   const [bindingCode, setBindingCode] = useState<{ code: string; instruction: string; expiresAt: string } | null>(null);
   const [bindingCodeLoading, setBindingCodeLoading] = useState(false);
   const [bindingCodeError, setBindingCodeError] = useState<string | null>(null);
+  const [ilinkConnection, setIlinkConnection] = useState<IlinkConnection | null>(null);
+  const [ilinkQr, setIlinkQr] = useState<IlinkQrCode | null>(null);
+  const [ilinkQrStatus, setIlinkQrStatus] = useState<IlinkQrStatus["status"] | null>(null);
+  const [ilinkLoading, setIlinkLoading] = useState(false);
+  const [ilinkError, setIlinkError] = useState<string | null>(null);
+  const ilinkPollRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    clearIlinkPolling();
+    setIlinkQr(null);
+    setIlinkQrStatus(null);
+    setIlinkError(null);
+    if (session?.access_token) void refreshIlinkConnection();
+    else setIlinkConnection(null);
+    return clearIlinkPolling;
+  }, [session?.access_token]);
+
+  function clearIlinkPolling(): void {
+    if (!ilinkPollRef.current) return;
+    window.clearInterval(ilinkPollRef.current);
+    ilinkPollRef.current = null;
+  }
+
+  async function refreshIlinkConnection(): Promise<void> {
+    if (!session?.access_token) return;
+    try {
+      setIlinkConnection(await fetchIlinkConnection(session.access_token));
+    } catch (error) {
+      setIlinkError(error instanceof Error ? error.message : "读取微信连接失败");
+    }
+  }
+
+  async function startIlinkScan(): Promise<void> {
+    if (!session?.access_token) return;
+    clearIlinkPolling();
+    setIlinkLoading(true);
+    setIlinkError(null);
+    setIlinkQrStatus(null);
+    try {
+      const qr = await createIlinkQrCode(session.access_token);
+      setIlinkQr(qr);
+      setIlinkQrStatus("pending");
+      const token = session.access_token;
+      const poll = async () => {
+        try {
+          const status = await checkIlinkQrCode(token, qr.qrcodeId);
+          setIlinkQrStatus(status.status);
+          if (status.status === "confirmed") {
+            clearIlinkPolling();
+            setIlinkQr(null);
+            setIlinkConnection(status.connection ?? (await fetchIlinkConnection(token)));
+          }
+          if (status.status === "expired") clearIlinkPolling();
+        } catch (error) {
+          clearIlinkPolling();
+          setIlinkError(error instanceof Error ? error.message : "读取微信扫码状态失败");
+        }
+      };
+      ilinkPollRef.current = window.setInterval(() => void poll(), 2000);
+      void poll();
+    } catch (error) {
+      setIlinkError(error instanceof Error ? error.message : "生成微信二维码失败");
+    } finally {
+      setIlinkLoading(false);
+    }
+  }
+
+  async function disconnectIlink(): Promise<void> {
+    if (!session?.access_token) return;
+    clearIlinkPolling();
+    setIlinkLoading(true);
+    setIlinkError(null);
+    try {
+      setIlinkConnection(await disconnectIlinkConnection(session.access_token));
+      setIlinkQr(null);
+      setIlinkQrStatus(null);
+    } catch (error) {
+      setIlinkError(error instanceof Error ? error.message : "断开微信连接失败");
+    } finally {
+      setIlinkLoading(false);
+    }
+  }
 
   async function generateBindingCode(): Promise<void> {
     if (!session?.access_token) return;
@@ -2337,6 +2426,8 @@ function SyncBox({
       setBindingCodeLoading(false);
     }
   }
+
+  const ilinkStatusText = getIlinkStatusText(ilinkConnection, ilinkQrStatus);
 
   return (
     <section className="sync-box" aria-label="同步">
@@ -2423,13 +2514,38 @@ function SyncBox({
 
       {isSupabaseConfigured && session && (
         <div className="wechat-binding">
-          <div>
-            <span>微信绑定</span>
-            <strong>{bindingCode?.code ?? "未生成"}</strong>
+          <div className="wechat-binding-main">
+            <div className="wechat-binding-summary">
+              <span>微信扫码</span>
+              <strong>{ilinkStatusText}</strong>
+            </div>
+            <button type="button" onClick={() => void startIlinkScan()} disabled={ilinkLoading}>
+              {ilinkLoading ? "处理中" : "扫码连接"}
+            </button>
+            {ilinkConnection?.connected && (
+              <button type="button" onClick={() => void disconnectIlink()} disabled={ilinkLoading}>
+                断开
+              </button>
+            )}
           </div>
-          <button type="button" onClick={() => void generateBindingCode()} disabled={bindingCodeLoading}>
-            {bindingCodeLoading ? "生成中" : "生成绑定码"}
-          </button>
+          {ilinkQr && (
+            <div className="wechat-qr-panel">
+              <img src={ilinkQr.qrcodeImage} alt="微信扫码连接" />
+              <p>{ilinkQrStatus === "expired" ? "二维码已过期" : "请用微信扫描二维码"}</p>
+            </div>
+          )}
+          {ilinkConnection?.lastPolledAt && <p>最近扫描 {formatDateTime(ilinkConnection.lastPolledAt)}</p>}
+          {ilinkConnection?.lastError && <p className="error-text">{ilinkConnection.lastError}</p>}
+          {ilinkError && <p className="error-text">{ilinkError}</p>}
+          <div className="wechat-binding-main wechat-binding-code-row">
+            <div className="wechat-binding-summary">
+              <span>绑定码备用</span>
+              <strong>{bindingCode?.code ?? "未生成"}</strong>
+            </div>
+            <button type="button" onClick={() => void generateBindingCode()} disabled={bindingCodeLoading}>
+              {bindingCodeLoading ? "生成中" : "生成绑定码"}
+            </button>
+          </div>
           {bindingCode && (
             <p>
               {bindingCode.instruction}
@@ -2458,6 +2574,20 @@ function SyncBox({
       {lastSyncedAt && status.tone !== "online" && <p>上次 {formatDateTime(lastSyncedAt)}</p>}
     </section>
   );
+}
+
+function getIlinkStatusText(
+  connection: IlinkConnection | null,
+  qrStatus: IlinkQrStatus["status"] | null
+): string {
+  if (qrStatus === "pending") return "等待扫码";
+  if (qrStatus === "scanned") return "已扫码，等待确认";
+  if (qrStatus === "expired") return "二维码过期";
+  if (qrStatus === "confirmed") return "已连接";
+  if (!connection || connection.status === "not_connected") return "未连接";
+  if (connection.status === "disabled") return "已断开";
+  if (connection.status === "error") return "连接异常";
+  return connection.hasReplyContext ? "已连接，可提醒" : "已连接，待激活";
 }
 
 function TaskListView({

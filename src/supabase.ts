@@ -62,6 +62,26 @@ export type BotBindingCode = {
   instruction: string;
 };
 
+export type IlinkConnection = {
+  connected: boolean;
+  status: "not_connected" | "connected" | "error" | "disabled";
+  connectedAt: string | null;
+  lastPolledAt: string | null;
+  lastError: string | null;
+  hasReplyContext: boolean;
+};
+
+export type IlinkQrCode = {
+  qrcodeId: string;
+  qrcodeImage: string;
+  expiresInSeconds: number;
+};
+
+export type IlinkQrStatus = {
+  status: "pending" | "scanned" | "expired" | "confirmed";
+  connection?: IlinkConnection;
+};
+
 export async function getSession(): Promise<Session | null> {
   if (!supabase) return null;
   const { data, error } = await supabase.auth.getSession();
@@ -116,6 +136,70 @@ export async function createBotBindingCode(accessToken: string): Promise<BotBind
     expiresAt: payload.expiresAt,
     instruction: payload.instruction,
   };
+}
+
+export async function createIlinkQrCode(accessToken: string): Promise<IlinkQrCode> {
+  const response = await fetch("/api/bot/ilink-qr", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const payload = (await response.json().catch(() => ({}))) as Partial<IlinkQrCode> & { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "生成微信二维码失败");
+  if (!payload.qrcodeId || !payload.qrcodeImage) throw new Error("微信二维码响应不完整");
+  return {
+    qrcodeId: payload.qrcodeId,
+    qrcodeImage: payload.qrcodeImage,
+    expiresInSeconds: payload.expiresInSeconds ?? 300,
+  };
+}
+
+export async function checkIlinkQrCode(accessToken: string, qrcodeId: string): Promise<IlinkQrStatus> {
+  const response = await fetch("/api/bot/ilink-status", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ qrcodeId }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as Partial<IlinkQrStatus> & { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "读取微信扫码状态失败");
+  if (payload.status !== "pending" && payload.status !== "scanned" && payload.status !== "expired" && payload.status !== "confirmed") {
+    throw new Error("微信扫码状态响应不完整");
+  }
+  return payload as IlinkQrStatus;
+}
+
+export async function fetchIlinkConnection(accessToken: string): Promise<IlinkConnection> {
+  const response = await fetch("/api/bot/ilink-connection", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ action: "status" }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { connection?: IlinkConnection; error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "读取微信连接失败");
+  if (!payload.connection) throw new Error("微信连接响应不完整");
+  return payload.connection;
+}
+
+export async function disconnectIlinkConnection(accessToken: string): Promise<IlinkConnection> {
+  const response = await fetch("/api/bot/ilink-connection", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ action: "disconnect" }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { connection?: IlinkConnection; error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "断开微信连接失败");
+  if (!payload.connection) throw new Error("微信连接响应不完整");
+  return payload.connection;
 }
 
 export async function syncWithCloud(

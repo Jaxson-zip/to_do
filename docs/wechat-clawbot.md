@@ -1,6 +1,7 @@
 # WeChat ClawBot Setup
 
 This project now has server-side bot endpoints for a ClawBot-style WeChat assistant.
+The recommended website-scan iLink flow is documented in `docs/wechat-ilink-scan.md`.
 
 For the cloud-server OpenClaw setup that does not require your PC to stay on,
 see `docs/openclaw-server.md`. That setup runs the same bot handlers through a
@@ -40,6 +41,7 @@ Run the current `supabase-schema.sql` in Supabase SQL Editor. It creates:
 - `bot_bindings`: maps ClawBot sender id to `auth.users.id`.
 - `bot_binding_codes`: one-time binding codes.
 - `bot_reminder_events`: tracks sent reminders so they do not repeat.
+- `bot_ilink_connections`: stores per-user website-scan iLink connections.
 
 ## ClawBot Incoming Webhook
 
