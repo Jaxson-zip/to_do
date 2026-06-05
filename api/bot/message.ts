@@ -69,7 +69,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     const binding = await getBotBinding(supabase, senderId);
     if (!binding) {
-      sendJson(response, 200, { reply: "还没有绑定账号。请先在网站生成绑定码，然后发送：绑定 TD-xxxxxx" });
+      sendJson(response, 200, { reply: "" });
       return;
     }
 
