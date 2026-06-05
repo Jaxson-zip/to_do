@@ -7,13 +7,14 @@ Supabase，微信通道放在一台云服务器上。你的个人电脑不需要
 
 除了“服务器部署 OpenClaw”，还必须准备这些东西：
 
-- 一台长期在线的 Ubuntu 云服务器。
+- 一台长期在线的云服务器，Ubuntu 或阿里云 Alibaba Cloud Linux 都可以。
 - 一个专门微信号，用来扫码登录机器人微信。
 - Vercel 生产环境变量，尤其是 `SUPABASE_SERVICE_ROLE_KEY` 和 `BOT_WEBHOOK_SECRET`。
 - Supabase 数据库执行最新版 `supabase-schema.sql`。
 - 服务器上的 `/etc/todo-openclaw.env`，里面放 Supabase 服务密钥和 Todo bot secret。
+- 服务器上的本地 Todo API 服务：`todo-openclaw-api.service`。
 - OpenClaw 微信插件扫码成功，并且 `openclaw-weixin/default` 账号保持在线。
-- OpenClaw inbound hook：收到微信消息后调用 Todo API。
+- OpenClaw inbound hook：收到微信消息后调用服务器本机 Todo API。
 - systemd timer：每分钟扫描一次到期提醒，再通过 OpenClaw 发微信。
 - 网站账号和微信账号之间的绑定码。
 
@@ -39,7 +40,7 @@ Supabase，微信通道放在一台云服务器上。你的个人电脑不需要
 微信消息
   -> 云服务器 OpenClaw 微信插件
   -> ~/.openclaw/hooks/todo-wechat
-  -> https://todo-theta-mauve-75.vercel.app/api/bot/message
+  -> http://127.0.0.1:8787/api/bot/message
   -> Supabase memo_items / bot_bindings
   -> hook 把 API reply 回发微信
 
@@ -50,13 +51,17 @@ systemd 每分钟
   -> 微信提醒
 ```
 
+Vercel 仍然保留：它负责网站本身、登录、同步面板和“生成绑定码”。微信消息链路不依赖
+Vercel，因为部分国内云服务器访问 `vercel.app` 不稳定。
+
 ## 项目里已经准备好的文件
 
 - `api/bot/message.ts`: 微信文本指令入口。
 - `api/bot/binding-code.ts`: 网站登录后生成微信绑定码。
+- `server/openclaw/bot-api-server.mjs`: 服务器本地 Todo API，复用 `api/bot/*` 处理逻辑。
 - `server/openclaw/todo-wechat-hook/`: OpenClaw 收消息 hook。
 - `server/openclaw/reminder-worker.mjs`: 服务器提醒扫描和发送脚本。
-- `server/openclaw/systemd/`: systemd 每分钟定时器模板。
+- `server/openclaw/systemd/`: 本地 API service 和每分钟提醒 timer 模板。
 - `server/openclaw/todo-openclaw.env.example`: 服务器环境变量模板。
 
 ## 阶段 0: 本地项目状态检查
@@ -133,11 +138,18 @@ try {
 
 ## 阶段 3: 云服务器基础环境
 
-推荐 Ubuntu 22.04 或 24.04。服务器只需要出站访问互联网，入站只开 SSH 就行。
+服务器只需要出站访问互联网，入站只开 SSH 就行。Ubuntu 22.04/24.04 和阿里云
+Alibaba Cloud Linux 都可以。
 
 ```bash
 sudo apt update
 sudo apt install -y ca-certificates curl git build-essential
+```
+
+如果是阿里云 Alibaba Cloud Linux，用：
+
+```bash
+dnf install -y ca-certificates curl git tar gzip xz
 ```
 
 OpenClaw 官方要求 Node 24，或 Node 22.19+。不要只用 Ubuntu 默认
@@ -173,6 +185,7 @@ sudo chown -R "$USER":"$USER" /opt/to_do
 cd /opt/to_do
 npm ci
 npm run build
+npm run bot:build-api-runtime
 ```
 
 如果以后更新代码：
@@ -182,6 +195,7 @@ cd /opt/to_do
 git pull
 npm ci
 npm run build
+npm run bot:build-api-runtime
 ```
 
 ## 阶段 5: 创建服务器环境变量
@@ -198,9 +212,11 @@ sudo chmod 600 /etc/todo-openclaw.env
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
 BOT_TIME_ZONE=Asia/Shanghai
-TODO_BOT_BASE_URL=https://todo-theta-mauve-75.vercel.app
+TODO_BOT_BASE_URL=http://127.0.0.1:8787
 TODO_BOT_SECRET=use-the-same-value-as-vercel-BOT_WEBHOOK_SECRET
 TODO_BOT_ALLOWED_CHANNELS=openclaw-weixin
+TODO_LOCAL_API_HOST=127.0.0.1
+TODO_LOCAL_API_PORT=8787
 OPENCLAW_CHANNEL=openclaw-weixin
 OPENCLAW_ACCOUNT=default
 OPENCLAW_BIN=/path/from-command-v-openclaw
@@ -217,7 +233,38 @@ command -v openclaw
 如果 `command -v node` 不是 `/usr/bin/node`，后面安装 timer 前要改
 `server/openclaw/systemd/todo-openclaw-reminders.service` 里的 `ExecStart`。
 
-## 阶段 6: 安装微信插件并扫码
+## 阶段 6: 启动本地 Todo API 服务
+
+这一步让 OpenClaw hook 调用本机 API，不经过 Vercel：
+
+```bash
+cd /opt/to_do
+npm run bot:build-api-runtime
+sudo cp /opt/to_do/server/openclaw/systemd/todo-openclaw-api.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now todo-openclaw-api.service
+```
+
+检查服务：
+
+```bash
+systemctl status todo-openclaw-api.service --no-pager
+curl -sS http://127.0.0.1:8787/healthz
+```
+
+期望看到：
+
+```json
+{"ok":true}
+```
+
+如果 `command -v node` 不是 `/usr/bin/node`，先编辑 service 里的 `ExecStart`：
+
+```bash
+sudo nano /etc/systemd/system/todo-openclaw-api.service
+```
+
+## 阶段 7: 安装微信插件并扫码
 
 ```bash
 npx -y @tencent-weixin/openclaw-weixin-cli@latest install
@@ -251,7 +298,7 @@ openclaw channels status --deep
 
 期望看到 `openclaw-weixin ... running`。
 
-## 阶段 7: 安装并启用 Todo hook
+## 阶段 8: 安装并启用 Todo hook
 
 安装 hook 文件：
 
@@ -336,7 +383,7 @@ openclaw gateway restart
 openclaw hooks check
 ```
 
-## 阶段 8: 安装提醒定时器
+## 阶段 9: 安装提醒定时器
 
 复制 systemd timer：
 
@@ -385,7 +432,7 @@ sudo bash -lc '
 {"checked":0,"sent":0,"skipped":0,"failed":0,"details":[]}
 ```
 
-## 阶段 9: 绑定网站账号和微信账号
+## 阶段 10: 绑定网站账号和微信账号
 
 1. 打开网站并登录。
 2. 打开同步面板。
@@ -398,7 +445,7 @@ sudo bash -lc '
 
 绑定成功后，这个微信会话的 sender id 会写进 `bot_bindings`。后续微信消息会写到同一个 Supabase 用户名下。
 
-## 阶段 10: 端到端测试
+## 阶段 11: 端到端测试
 
 在微信里发：
 
@@ -471,11 +518,34 @@ journalctl -u todo-openclaw-reminders.service -n 120 --no-pager
 
 ### API 返回 401
 
-`TODO_BOT_SECRET` 必须和 Vercel 的 `BOT_WEBHOOK_SECRET` 完全一致。
+`TODO_BOT_SECRET` 必须和 Vercel 的 `BOT_WEBHOOK_SECRET` 完全一致。OpenClaw hook
+请求本地 API 时会把这个值放在 `x-bot-secret` 请求头里。
 
 ### API 返回 500
 
-常见是 Vercel 没有 `SUPABASE_SERVICE_ROLE_KEY`，或者 Supabase 还没执行最新版 SQL。
+先看本地 API 日志：
+
+```bash
+journalctl -u todo-openclaw-api.service -n 120 --no-pager
+```
+
+常见是 `/etc/todo-openclaw.env` 没有 `SUPABASE_SERVICE_ROLE_KEY`，或者 Supabase
+还没执行最新版 SQL。
+
+### 本地 API 没起来
+
+```bash
+systemctl status todo-openclaw-api.service --no-pager
+curl -sS http://127.0.0.1:8787/healthz
+journalctl -u todo-openclaw-api.service -n 120 --no-pager
+```
+
+确认：
+
+- 已执行 `npm run bot:build-api-runtime`。
+- `/opt/to_do/server/openclaw/api-runtime/bot/message.js` 存在。
+- `/etc/todo-openclaw.env` 存在并且权限是 `600`。
+- `todo-openclaw-api.service` 里的 `ExecStart` 指向正确的 `node`。
 
 ## 更新流程
 
@@ -486,18 +556,22 @@ cd /opt/to_do
 git pull
 npm ci
 npm run build
+npm run bot:build-api-runtime
 cp -r server/openclaw/todo-wechat-hook/* ~/.openclaw/hooks/todo-wechat/
 openclaw hooks enable todo-wechat
 openclaw gateway restart
+sudo systemctl restart todo-openclaw-api.service
 sudo systemctl restart todo-openclaw-reminders.timer
 ```
 
 如果改了 systemd service 或 timer：
 
 ```bash
+sudo cp server/openclaw/systemd/todo-openclaw-api.service /etc/systemd/system/
 sudo cp server/openclaw/systemd/todo-openclaw-reminders.service /etc/systemd/system/
 sudo cp server/openclaw/systemd/todo-openclaw-reminders.timer /etc/systemd/system/
 sudo systemctl daemon-reload
+sudo systemctl restart todo-openclaw-api.service
 sudo systemctl restart todo-openclaw-reminders.timer
 ```
 

@@ -3,9 +3,9 @@
 This project now has server-side bot endpoints for a ClawBot-style WeChat assistant.
 
 For the cloud-server OpenClaw setup that does not require your PC to stay on,
-see `docs/openclaw-server.md`. That setup uses the inbound message endpoint
-below, but sends proactive reminders from the cloud server through
-`server/openclaw/reminder-worker.mjs`.
+see `docs/openclaw-server.md`. That setup runs the same bot handlers through a
+local server API on `127.0.0.1:8787`, then sends proactive reminders from the
+cloud server through `server/openclaw/reminder-worker.mjs`.
 
 ## What It Can Do
 
@@ -43,7 +43,8 @@ Run the current `supabase-schema.sql` in Supabase SQL Editor. It creates:
 
 ## ClawBot Incoming Webhook
 
-Configure ClawBot's incoming webhook/tool URL to:
+If you are using a public ClawBot-compatible webhook provider, configure its
+incoming webhook/tool URL to:
 
 ```text
 https://your-vercel-domain.vercel.app/api/bot/message
@@ -109,6 +110,9 @@ Response:
 The code expires after 10 minutes and can only be used once. Codes are retried on rare collisions.
 
 ## Reminder Worker
+
+For the OpenClaw server deployment, reminders are normally sent by
+`server/openclaw/reminder-worker.mjs` through `openclaw message send`.
 
 The reminder endpoint is:
 
