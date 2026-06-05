@@ -96,14 +96,12 @@ ${recentTasks.length > 0 ? recentTasks.map(t => `- ID: ${t.id}, 标题: ${t.titl
 
     // Validate and clean up
     if (parsed.type === "createTask") {
-      if (!parsed.eventAt && parsed.reminderAt) {
-        parsed.eventAt = parsed.reminderAt;
-      }
+      if (!parsed.eventAt && parsed.reminderAt) parsed.eventAt = parsed.reminderAt;
+      if (!parsed.reminderAt && parsed.eventAt) parsed.reminderAt = parsed.eventAt;
     } else if (parsed.type === "createTasks" && Array.isArray(parsed.items)) {
       parsed.items.forEach((item: any) => {
-        if (!item.eventAt && item.reminderAt) {
-          item.eventAt = item.reminderAt;
-        }
+        if (!item.eventAt && item.reminderAt) item.eventAt = item.reminderAt;
+        if (!item.reminderAt && item.eventAt) item.reminderAt = item.eventAt;
         item.raw = text;
       });
     }
