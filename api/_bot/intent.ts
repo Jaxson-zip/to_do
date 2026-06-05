@@ -6,6 +6,7 @@ export type BotIntent =
   | { type: "listToday" }
   | { type: "listOpen" }
   | { type: "complete"; query: string }
+  | { type: "completeRecent" }
   | { type: "delete"; query: string }
   | { type: "snooze"; minutes: number }
   | { type: "ack" }
@@ -46,6 +47,8 @@ export function parseBotIntent(rawText: string, baseDate = new Date()): BotInten
 
   if (isTodayListQuery(text)) return { type: "listToday" };
   if (isOpenListQuery(text)) return { type: "listOpen" };
+
+  if (/^(?:完成|完成了|搞定|搞定了|done)$/i.test(text)) return { type: "completeRecent" };
 
   const complete = text.match(/^(?:完成|搞定|done)\s*(.+)$/i);
   if (complete?.[1]?.trim()) return { type: "complete", query: complete[1].trim() };

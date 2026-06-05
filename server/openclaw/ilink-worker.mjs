@@ -15,6 +15,7 @@ const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
 const connectionLimit = numberEnv("TODO_ILINK_CONNECTION_LIMIT", 50);
 const reminderLimit = numberEnv("TODO_ILINK_REMINDER_LIMIT", 50);
 const dryRun = process.env.TODO_ILINK_DRY_RUN === "1";
+const remindersOnly = process.env.TODO_ILINK_REMINDERS_ONLY === "1";
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: {
@@ -40,6 +41,9 @@ async function runIlinkWorker() {
 
   const connections = await fetchActiveIlinkConnections(supabase, connectionLimit);
   result.connections = connections.length;
+
+  await sendDueReminders(connections, result);
+  if (remindersOnly) return result;
 
   for (const connection of connections) {
     await pollConnection(connection, result);
@@ -114,7 +118,7 @@ async function pollConnection(connection, result) {
 async function sendDueReminders(connections, result) {
   const nowIso = new Date().toISOString();
   const dueTasks = await fetchDueReminderTasks(nowIso, reminderLimit);
-  result.remindersChecked = dueTasks.length;
+  result.remindersChecked += dueTasks.length;
   const connectionByUserId = new Map(connections.map((connection) => [connection.user_id, connection]));
 
   for (const row of dueTasks) {

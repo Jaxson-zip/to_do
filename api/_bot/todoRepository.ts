@@ -362,6 +362,44 @@ export async function markTaskDone(supabase: SupabaseClient, userId: string, ite
   if (error) throw error;
 }
 
+export async function completeMostRecentReminder(
+  supabase: SupabaseClient,
+  userId: string,
+  providerUserId: string,
+  provider: BotProvider = "clawbot"
+): Promise<MemoItem | null> {
+  const { data, error } = await supabase
+    .from("bot_reminder_events")
+    .select("id, item_id")
+    .eq("provider", provider)
+    .eq("provider_user_id", providerUserId)
+    .eq("user_id", userId)
+    .not("sent_at", "is", null)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  const reminder = data as { id: string; item_id: string } | null;
+  if (!reminder) return null;
+
+  const updatedAt = new Date().toISOString();
+  const { data: updated, error: updateError } = await supabase
+    .from("memo_items")
+    .update({ status: "done", updated_at: updatedAt })
+    .eq("user_id", userId)
+    .eq("id", reminder.item_id)
+    .eq("kind", "task")
+    .eq("status", "open")
+    .eq("archived", false)
+    .is("deleted_at", null)
+    .select("*")
+    .maybeSingle();
+
+  if (updateError) throw updateError;
+  return updated ? memoItemFromRow(updated as MemoItemRow) : null;
+}
+
 export async function softDeleteTask(supabase: SupabaseClient, userId: string, itemId: string): Promise<void> {
   const updatedAt = new Date().toISOString();
   const { error } = await supabase

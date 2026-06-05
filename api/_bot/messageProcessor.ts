@@ -12,6 +12,7 @@ import { findBestOpenTaskMatch, sortOpenTasksForBot } from "./taskMatcher.js";
 import { dateKeyInBotTimeZone } from "./time.js";
 import {
   type BotProvider,
+  completeMostRecentReminder,
   createNoteFromIntent,
   createTaskFromIntent,
   fetchOpenTasks,
@@ -78,6 +79,17 @@ export async function handleBoundIntent(
     const tasks = sortOpenTasksForBot(await fetchOpenTasks(supabase, userId, 20));
     if (tasks.length === 0) return "现在没有未完成任务。";
     return `你现在的未完成任务：\n${formatTaskListReply(tasks, "现在没有未完成任务。")}`;
+  }
+
+  if (intent.type === "completeRecent") {
+    const item = await completeMostRecentReminder(
+      supabase,
+      userId,
+      senderId,
+      options?.reminderProvider ?? "clawbot"
+    );
+    if (!item) return "没有找到最近提醒过、还没完成的任务。";
+    return formatCompletedReply(item);
   }
 
   if (intent.type === "complete" || intent.type === "delete") {

@@ -40,6 +40,12 @@ describe("parseBotIntent", () => {
       type: "complete",
       query: "复习英语",
     });
+    expect(parseBotIntent("完成", baseDate)).toEqual({
+      type: "completeRecent",
+    });
+    expect(parseBotIntent("搞定了", baseDate)).toEqual({
+      type: "completeRecent",
+    });
     expect(parseBotIntent("done homework", baseDate)).toEqual({
       type: "complete",
       query: "homework",

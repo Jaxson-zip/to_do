@@ -6,6 +6,7 @@ This is the website-scan binding mode. It is different from the older binding-co
 - The user scans it in WeChat and authorizes the WeChat ClawBot/iLink channel.
 - The server stores that user's `bot_token`, `base_url`, polling cursor, and reply context in Supabase.
 - The server polls iLink every few seconds, turns incoming WeChat text into Todo commands, and sends replies through iLink.
+- A separate fast reminder timer scans due reminders every few seconds, so short reminders do not wait for message polling.
 - Due reminders are sent through the same iLink connection when the user has a fresh reply context.
 
 No shared robot WeChat account is required for this mode. Each logged-in Todo user authorizes their own WeChat iLink connection from the sync panel.
@@ -58,8 +59,11 @@ Install the iLink poller:
 ```bash
 sudo cp /opt/to_do/server/openclaw/systemd/todo-ilink-poller.service /etc/systemd/system/
 sudo cp /opt/to_do/server/openclaw/systemd/todo-ilink-poller.timer /etc/systemd/system/
+sudo cp /opt/to_do/server/openclaw/systemd/todo-ilink-reminders.service /etc/systemd/system/
+sudo cp /opt/to_do/server/openclaw/systemd/todo-ilink-reminders.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now todo-ilink-poller.timer
+sudo systemctl enable --now todo-ilink-reminders.timer
 ```
 
 Check it:
@@ -67,6 +71,7 @@ Check it:
 ```bash
 systemctl list-timers '*todo-ilink*'
 journalctl -u todo-ilink-poller.service -n 80 --no-pager
+journalctl -u todo-ilink-reminders.service -n 80 --no-pager
 ```
 
 The poller reads `/etc/todo-openclaw.env` and needs:

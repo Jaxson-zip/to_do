@@ -5,6 +5,7 @@ const getSupabaseAdmin = vi.fn();
 const bindProviderUser = vi.fn();
 const fetchOpenTasks = vi.fn();
 const getBotBinding = vi.fn();
+const completeMostRecentReminder = vi.fn();
 const createNoteFromIntent = vi.fn();
 const createTaskFromIntent = vi.fn();
 const markTaskDone = vi.fn();
@@ -17,6 +18,7 @@ vi.mock("../../api/_bot/supabaseAdmin.js", () => ({
 
 vi.mock("../../api/_bot/todoRepository.js", () => ({
   bindProviderUser,
+  completeMostRecentReminder,
   createNoteFromIntent,
   createTaskFromIntent,
   fetchOpenTasks,
@@ -126,6 +128,28 @@ describe("bot message handler", () => {
       { client: "supabase" },
       "todo-user",
       expect.objectContaining({ type: "createNote", title: "体重 66.7kg" })
+    );
+    expect(createTaskFromIntent).not.toHaveBeenCalled();
+  });
+
+  it("marks the most recent reminder done for bare completion replies", async () => {
+    getBotBinding.mockResolvedValue({ provider: "clawbot", provider_user_id: "wechat-user", user_id: "todo-user" });
+    completeMostRecentReminder.mockResolvedValue({
+      title: "打水",
+      dueDate: "2026-06-05",
+      reminderAt: "2026-06-05T07:46:21.000Z",
+    });
+
+    const response = await invokeMessageHandler({ senderId: "wechat-user", text: "完成" });
+    const body = response.body as { reply: string };
+
+    expect(response.statusCode).toBe(200);
+    expect(body.reply).toContain("已完成：打水");
+    expect(completeMostRecentReminder).toHaveBeenCalledWith(
+      { client: "supabase" },
+      "todo-user",
+      "wechat-user",
+      "clawbot"
     );
     expect(createTaskFromIntent).not.toHaveBeenCalled();
   });
