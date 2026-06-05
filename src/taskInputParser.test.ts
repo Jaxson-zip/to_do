@@ -49,6 +49,37 @@ describe("parseTaskInput", () => {
     expect(localHourMinute(eveningHour.reminderAt)).toBe("20:00");
   });
 
+  it("parses common Chinese time ranges without keeping the end time in the title", () => {
+    const cases = [
+      "明天下午5.到7.打球",
+      "明天下午5到7打球",
+      "明天下午5点到7点打球",
+      "明天下午5-7打球",
+      "明天下午5:30到7:30打球",
+      "明天晚上8到9点打球",
+    ];
+
+    const parsed = cases.map((value) => parseTaskInput(value, baseDate, { rollPastTime: false }));
+
+    expect(parsed.map((item) => item.title)).toEqual(["打球", "打球", "打球", "打球", "打球", "打球"]);
+    expect(parsed.map((item) => localHourMinute(item.reminderAt))).toEqual([
+      "17:00",
+      "17:00",
+      "17:00",
+      "17:00",
+      "17:30",
+      "20:00",
+    ]);
+    expect(parsed.map((item) => localHourMinute(item.endAt ?? null))).toEqual([
+      "19:00",
+      "19:00",
+      "19:00",
+      "19:00",
+      "19:30",
+      "21:00",
+    ]);
+  });
+
   it("still parses clear hour inputs for work tasks", () => {
     const plainTime = parseTaskInput("8.30上班", baseDate, { rollPastTime: false });
     const morningTime = parseTaskInput("上午8上班", baseDate, { rollPastTime: false });

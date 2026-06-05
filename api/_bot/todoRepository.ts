@@ -91,7 +91,12 @@ export async function createTaskFromIntent(
   intent: Extract<BotIntent, { type: "createTask" }>
 ): Promise<MemoItem> {
   const createdAt = new Date().toISOString();
-  const body = intent.eventAt && intent.reminderAt && intent.eventAt !== intent.reminderAt ? `原定时间：${intent.eventAt}` : "";
+  const body = [
+    intent.eventAt && intent.reminderAt && intent.eventAt !== intent.reminderAt ? `原定时间：${intent.eventAt}` : "",
+    intent.endAt ? `结束时间：${intent.endAt}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
   const payload: MemoItemRow = {
     id: randomUUID(),
     user_id: userId,

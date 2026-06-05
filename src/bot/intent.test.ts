@@ -90,6 +90,16 @@ describe("parseBotIntent", () => {
     expect(new Date(intent.reminderAt ?? "").getHours()).toBe(22);
   });
 
+  it("parses time ranges from WeChat shorthand", () => {
+    const intent = parseBotIntent("明天下午5.到7.打球", new Date("2026-06-05T15:00:00+08:00"));
+
+    expect(intent.type).toBe("createTask");
+    if (intent.type !== "createTask") throw new Error("expected createTask");
+    expect(intent.title).toBe("打球");
+    expect(new Date(intent.eventAt ?? "").getHours()).toBe(17);
+    expect(new Date(intent.endAt ?? "").getHours()).toBe(19);
+  });
+
   it("parses create commands with an early reminder offset", () => {
     const intent = parseBotIntent("明天上午10点交作业，提前30分钟提醒", baseDate);
 

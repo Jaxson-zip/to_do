@@ -15,6 +15,7 @@ export type BotIntent =
       dueDate: string | null;
       reminderAt: string | null;
       eventAt: string | null;
+      endAt: string | null;
       repeatRule: RepeatRule;
       raw: string;
     }
@@ -93,6 +94,7 @@ function parseSingleTaskIntent(
     dueDate: parsed.dueDate,
     reminderAt,
     eventAt,
+    endAt: parsed.endAt ?? null,
     repeatRule: repeat.repeatRule,
     raw: rawText,
   };

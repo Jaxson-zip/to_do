@@ -92,6 +92,28 @@ describe("bot message handler", () => {
     expect(createTaskFromIntent).toHaveBeenCalledTimes(3);
   });
 
+  it("replies cleanly for shorthand time ranges", async () => {
+    getBotBinding.mockResolvedValue({ provider: "clawbot", provider_user_id: "wechat-user", user_id: "todo-user" });
+    createTaskFromIntent.mockImplementation(async (_supabase, _userId, intent) => ({
+      title: intent.title,
+      dueDate: intent.dueDate,
+      reminderAt: intent.reminderAt,
+      repeatRule: intent.repeatRule,
+    }));
+
+    const response = await invokeMessageHandler({ senderId: "wechat-user", text: "明天下午5.到7.打球" });
+    const body = response.body as { reply: string };
+
+    expect(body.reply).toContain("打球");
+    expect(body.reply).not.toContain("到7");
+    expect(body.reply).toContain("-");
+    expect(createTaskFromIntent).toHaveBeenCalledWith(
+      { client: "supabase" },
+      "todo-user",
+      expect.objectContaining({ title: "打球", endAt: expect.any(String) })
+    );
+  });
+
   it("creates notes from lightweight record commands", async () => {
     getBotBinding.mockResolvedValue({ provider: "clawbot", provider_user_id: "wechat-user", user_id: "todo-user" });
     createNoteFromIntent.mockResolvedValue({ title: "体重 66.7kg" });

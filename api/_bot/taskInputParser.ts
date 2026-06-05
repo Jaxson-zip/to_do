@@ -5,6 +5,7 @@ export type ParsedTaskInput = {
   title: string;
   dueDate: string | null;
   reminderAt: string | null;
+  endAt?: string | null;
 };
 
 export function parseTaskInput(
@@ -60,18 +61,45 @@ function parseChineseQuickTime(
   if (!Number.isInteger(minute) || minute < 0 || minute > 59) return null;
 
   const date = dateFromWord(dateWord || periodWord || "", baseDate);
-  date.setHours(normalizeHour(hour, periodWord || dateWord || ""), minute, 0, 0);
+  const normalizedStartHour = normalizeHour(hour, periodWord || dateWord || "");
+  date.setHours(normalizedStartHour, minute, 0, 0);
 
   if (rollPastTime && !dateWord && toDateKey(baseDate) === getToday() && date.getTime() < Date.now() - 60_000) {
     date.setDate(date.getDate() + 1);
   }
 
-  const title = cleanupParsedTitle(raw.slice(match[0].length));
+  const range = parseTrailingTimeRange(raw.slice(match[0].length), date, periodWord || dateWord || "");
+  const title = cleanupParsedTitle(raw.slice(match[0].length + range.consumedLength));
   return {
     title: title || raw,
     dueDate: toDateKey(date),
     reminderAt: date.toISOString(),
+    endAt: range.endAt?.toISOString() ?? null,
   };
+}
+
+function parseTrailingTimeRange(
+  value: string,
+  startDate: Date,
+  inheritedPeriod: string
+): { consumedLength: number; endAt: Date | null } {
+  const rangeConnector = "\\s*(?:到|至|[-~～—－])\\s*";
+  const period = "(凌晨|早|早上|上午|中午|下午|晚|晚上|今晚|傍晚|夜里|明晚)?\\s*";
+  const endCore = "(\\d{1,2})(?:(?:[:：.．](\\d{1,2}))|点半|点|半|(?:[:：.．](?=\\D|$)))?";
+  const match = value.match(new RegExp(`^${rangeConnector}${period}${endCore}`));
+  if (!match) return { consumedLength: 0, endAt: null };
+
+  const [matched, endPeriod = "", hourText, minuteText] = match;
+  const hour = Number(hourText);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return { consumedLength: 0, endAt: null };
+
+  const minute = matched.includes("半") ? 30 : minuteText ? Number(minuteText) : 0;
+  if (!Number.isInteger(minute) || minute < 0 || minute > 59) return { consumedLength: 0, endAt: null };
+
+  const endAt = new Date(startDate);
+  endAt.setHours(normalizeHour(hour, endPeriod || inheritedPeriod), minute, 0, 0);
+  if (endAt.getTime() <= startDate.getTime()) endAt.setDate(endAt.getDate() + 1);
+  return { consumedLength: matched.length, endAt };
 }
 
 function isClearlyTemporalResult(text: string): boolean {

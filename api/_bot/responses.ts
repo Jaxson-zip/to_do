@@ -54,12 +54,23 @@ function formatScheduledSummary(
   intent?: CreateTaskIntent
 ): string {
   const when = intent?.eventAt ?? item.reminderAt ?? item.dueDate;
-  const parts = [when ? formatDateTime(when) : "无日期", item.title];
+  const parts = [formatDateRange(when, intent?.endAt), item.title];
   const early = intent ? formatEarlyOffset(intent) : "";
   if (early) parts.push(`${early}叫你`);
   const repeat = formatRepeat(item.repeatRule);
   if (repeat) parts.push(repeat);
   return parts.join(" · ");
+}
+
+function formatDateRange(start: string | null | undefined, end: string | null | undefined): string {
+  if (!start) return "无日期";
+  if (!end) return formatDateTime(start);
+  const startText = formatDateTime(start);
+  const endText = new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(end));
+  return `${startText}-${endText}`;
 }
 
 function formatEarlyOffset(intent: CreateTaskIntent): string {
