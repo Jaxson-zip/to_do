@@ -65,6 +65,9 @@ Supabase 控制台还需要确认：
 ```env
 VITE_SUPABASE_URL=你的 Supabase Project URL
 VITE_SUPABASE_ANON_KEY=你的 Supabase Publishable/Anon key
+VITE_OPENAI_API_KEY=你的大模型 API 密钥（可选，用于微信机器人的高级自然语言理解）
+VITE_OPENAI_BASE_URL=大模型 API 地址（可选，如 https://api.deepseek.com/v1）
+VITE_OPENAI_MODEL=大模型名称（可选，如 deepseek-chat）
 ```
 
 5. 点击 Deploy。
