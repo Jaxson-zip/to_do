@@ -140,7 +140,7 @@ function isTodayListQuery(text: string): boolean {
 
 function isOpenListQuery(text: string): boolean {
   const compact = text.replace(/\s+/g, "");
-  if (/^(?:任务列表|未完成任务|待办列表|list|tasks)$/i.test(compact)) return true;
+  if (/^(?:任务列表|人物列表|未完成任务|待办列表|list|tasks)$/i.test(compact)) return true;
   return /(?:还有|有什么|有啥|哪些|还剩|剩下)/.test(compact) && /(?:没完成|未完成|待办|任务|没做|要做)/.test(compact);
 }
 

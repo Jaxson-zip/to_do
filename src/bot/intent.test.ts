@@ -30,6 +30,7 @@ describe("parseBotIntent", () => {
 
   it("parses open-list commands", () => {
     expect(parseBotIntent("任务列表", baseDate)).toEqual({ type: "listOpen" });
+    expect(parseBotIntent("人物列表", baseDate)).toEqual({ type: "listOpen" });
     expect(parseBotIntent("未完成任务", baseDate)).toEqual({ type: "listOpen" });
     expect(parseBotIntent("我还有什么没完成", baseDate)).toEqual({ type: "listOpen" });
     expect(parseBotIntent("tasks", baseDate)).toEqual({ type: "listOpen" });
