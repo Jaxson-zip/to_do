@@ -7,6 +7,18 @@ const model = process.env.VITE_OPENAI_MODEL || "deepseek-chat";
 
 const openai = apiKey ? new OpenAI({ apiKey, baseURL }) : null;
 
+function getBeijingTimeString(date: Date) {
+  const tzOffset = 8 * 60; // Beijing is UTC+8
+  const localTime = date.getTime();
+  const localOffset = date.getTimezoneOffset(); // in minutes
+  const utc = localTime + localOffset * 60000;
+  const beijing = utc + tzOffset * 60000;
+  const nd = new Date(beijing);
+
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${nd.getFullYear()}-${pad(nd.getMonth() + 1)}-${pad(nd.getDate())}T${pad(nd.getHours())}:${pad(nd.getMinutes())}:${pad(nd.getSeconds())}+08:00`;
+}
+
 export async function parseIntentWithLLM(
   text: string,
   baseDate: Date,
@@ -17,12 +29,11 @@ export async function parseIntentWithLLM(
   }
 
   const dayMap = ["日", "一", "二", "三", "四", "五", "六"];
-  // e.g. 2026-06-05T17:00:00+08:00
-  const dateStr = baseDate.toISOString();
+  const dateStr = getBeijingTimeString(baseDate);
   const dayOfWeek = dayMap[baseDate.getDay()];
 
   const prompt = `你是一个待办事项应用的自然语言理解助手。
-当前的系统时间是：${dateStr}，星期${dayOfWeek}。
+当前的系统时间是（北京时间）：${dateStr}，星期${dayOfWeek}。
 
 你的任务是将用户的自然语言输入转化为标准化的 JSON 意图。
 请务必返回一个合法的 JSON，不要包含任何 \`\`\`json 等 Markdown 包裹，仅输出纯 JSON 文本。
@@ -33,10 +44,10 @@ ${recentTasks.length > 0 ? recentTasks.map(t => `- ID: ${t.id}, 标题: ${t.titl
 请返回以下结构之一的 JSON：
 
 1. 创建单任务：
-{"type":"createTask", "title":"清理后的任务标题", "dueDate":"YYYY-MM-DD"或null, "eventAt":"ISO格式时间字符串"或null, "reminderAt":"ISO格式时间字符串"或null, "repeatRule":"none|daily|weekly|monthly"}
+{"type":"createTask", "title":"清理后的任务标题", "dueDate":"YYYY-MM-DD"或null, "eventAt":"带+08:00的ISO格式时间"或null, "reminderAt":"带+08:00的ISO格式时间"或null, "repeatRule":"none|daily|weekly|monthly"}
 - "title"：应该去除时间修饰语，例如“明天下午5点去打球提前半小时提醒我”，title 应该是“去打球”。
-- "eventAt"：任务实际发生的准确时间。
-- "reminderAt"：系统触发提醒的时间。如果用户说“提前半小时提醒我”，请在此计算减去30分钟；如果没有指定提前，则与 eventAt 保持一致。如果用户完全没提到具体时间点（如“明天交话费”），则不需要精确的 ISO 字符串，reminderAt 可以为 null，但 dueDate 必须设置为对应的日期 "YYYY-MM-DD"。
+- "eventAt"：任务实际发生的准确时间，必须包含 +08:00 时区，例如 "2026-06-06T17:00:00+08:00"。
+- "reminderAt"：必须包含 +08:00 时区。如果用户说“提前半小时提醒”，请计算减去30分钟；否则与 eventAt 一致。如果没提到具体时间，则置为 null，但 dueDate 必须填。
 
 2. 批量创建任务：
 {"type":"createTasks", "items": [{"type":"createTask", "title":"...", ...}, ...]}
