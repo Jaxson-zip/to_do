@@ -410,6 +410,22 @@ export async function softDeleteTask(supabase: SupabaseClient, userId: string, i
   if (error) throw error;
 }
 
+export async function softDeleteOpenTasks(supabase: SupabaseClient, userId: string): Promise<number> {
+  const updatedAt = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("memo_items")
+    .update({ deleted_at: updatedAt, archived: false, updated_at: updatedAt })
+    .eq("user_id", userId)
+    .eq("kind", "task")
+    .eq("status", "open")
+    .eq("archived", false)
+    .is("deleted_at", null)
+    .select("id");
+
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+
 export async function snoozeMostRecentReminder(
   supabase: SupabaseClient,
   userId: string,

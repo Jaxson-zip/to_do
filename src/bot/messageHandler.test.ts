@@ -9,6 +9,7 @@ const completeMostRecentReminder = vi.fn();
 const createNoteFromIntent = vi.fn();
 const createTaskFromIntent = vi.fn();
 const markTaskDone = vi.fn();
+const softDeleteOpenTasks = vi.fn();
 const softDeleteTask = vi.fn();
 const snoozeMostRecentReminder = vi.fn();
 
@@ -25,6 +26,7 @@ vi.mock("../../api/_bot/todoRepository.js", () => ({
   getBotBinding,
   markTaskDone,
   softDeleteTask,
+  softDeleteOpenTasks,
   snoozeMostRecentReminder,
 }));
 
@@ -151,6 +153,18 @@ describe("bot message handler", () => {
       "wechat-user",
       "clawbot"
     );
+    expect(createTaskFromIntent).not.toHaveBeenCalled();
+  });
+
+  it("clears open tasks without creating a task", async () => {
+    getBotBinding.mockResolvedValue({ provider: "clawbot", provider_user_id: "wechat-user", user_id: "todo-user" });
+    softDeleteOpenTasks.mockResolvedValue(2);
+
+    const response = await invokeMessageHandler({ senderId: "wechat-user", text: "清理所有任务" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({ reply: "已清理 2 个未完成任务。" });
+    expect(softDeleteOpenTasks).toHaveBeenCalledWith({ client: "supabase" }, "todo-user");
     expect(createTaskFromIntent).not.toHaveBeenCalled();
   });
 });

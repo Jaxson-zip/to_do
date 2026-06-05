@@ -58,6 +58,12 @@ describe("parseBotIntent", () => {
       type: "delete",
       query: "复习英语",
     });
+    expect(parseBotIntent("清理所有任务", baseDate)).toEqual({
+      type: "deleteAllTasks",
+    });
+    expect(parseBotIntent("清空待办", baseDate)).toEqual({
+      type: "deleteAllTasks",
+    });
     expect(parseBotIntent("delete homework", baseDate)).toEqual({
       type: "delete",
       query: "homework",

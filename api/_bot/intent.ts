@@ -8,6 +8,7 @@ export type BotIntent =
   | { type: "complete"; query: string }
   | { type: "completeRecent" }
   | { type: "delete"; query: string }
+  | { type: "deleteAllTasks" }
   | { type: "snooze"; minutes: number }
   | { type: "ack" }
   | {
@@ -52,6 +53,8 @@ export function parseBotIntent(rawText: string, baseDate = new Date()): BotInten
 
   const complete = text.match(/^(?:完成|搞定|done)\s*(.+)$/i);
   if (complete?.[1]?.trim()) return { type: "complete", query: complete[1].trim() };
+
+  if (isDeleteAllTasksCommand(text)) return { type: "deleteAllTasks" };
 
   const remove = text.match(/^(?:删除|取消|delete)\s*(.+)$/i);
   if (remove?.[1]?.trim()) return { type: "delete", query: remove[1].trim() };
@@ -142,6 +145,11 @@ function isOpenListQuery(text: string): boolean {
   const compact = text.replace(/\s+/g, "");
   if (/^(?:任务列表|人物列表|未完成任务|待办列表|list|tasks)$/i.test(compact)) return true;
   return /(?:还有|有什么|有啥|哪些|还剩|剩下)/.test(compact) && /(?:没完成|未完成|待办|任务|没做|要做)/.test(compact);
+}
+
+function isDeleteAllTasksCommand(text: string): boolean {
+  const compact = text.replace(/\s+/g, "");
+  return /^(?:清理|清空|删除|取消)(?:全部|所有|全部的|所有的)?(?:任务|待办)$/.test(compact);
 }
 
 function parseRepeatRule(text: string): RepeatParseResult {

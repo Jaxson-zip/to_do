@@ -18,6 +18,7 @@ import {
   fetchOpenTasks,
   markTaskDone,
   snoozeMostRecentReminder,
+  softDeleteOpenTasks,
   softDeleteTask,
 } from "./todoRepository.js";
 
@@ -90,6 +91,11 @@ export async function handleBoundIntent(
     );
     if (!item) return "没有找到最近提醒过、还没完成的任务。";
     return formatCompletedReply(item);
+  }
+
+  if (intent.type === "deleteAllTasks") {
+    const deleted = await softDeleteOpenTasks(supabase, userId);
+    return deleted > 0 ? `已清理 ${deleted} 个未完成任务。` : "现在没有需要清理的未完成任务。";
   }
 
   if (intent.type === "complete" || intent.type === "delete") {
