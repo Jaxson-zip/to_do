@@ -29,8 +29,8 @@ export function parseBotIntent(rawText: string, baseDate = new Date()): BotInten
   const bind = text.match(/^(?:绑定|bind)\s+([a-z]{2,8}-?\d{4,10})$/i);
   if (bind) return { type: "bind", code: bind[1].toUpperCase() };
 
-  if (/^(?:今天有什么.*|今天.*任务|今日任务)$/i.test(text)) return { type: "listToday" };
-  if (/^(?:任务列表|未完成任务|待办列表|list|tasks)$/i.test(text)) return { type: "listOpen" };
+  if (isTodayListQuery(text)) return { type: "listToday" };
+  if (isOpenListQuery(text)) return { type: "listOpen" };
 
   const complete = text.match(/^(?:完成|搞定|done)\s*(.+)$/i);
   if (complete?.[1]?.trim()) return { type: "complete", query: complete[1].trim() };
@@ -63,6 +63,19 @@ export function parseBotIntent(rawText: string, baseDate = new Date()): BotInten
 
 function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, " ");
+}
+
+function isTodayListQuery(text: string): boolean {
+  const compact = text.replace(/\s+/g, "");
+  if (/^(?:今天有什么.*|今天.*任务|今日任务)$/i.test(compact)) return true;
+  if (!/(?:今天|今日)/.test(compact)) return false;
+  return /(?:有什么|有啥|哪些|还要做什么|要做什么|还剩什么|剩下什么|待办|任务|没完成|未完成|没做)/.test(compact);
+}
+
+function isOpenListQuery(text: string): boolean {
+  const compact = text.replace(/\s+/g, "");
+  if (/^(?:任务列表|未完成任务|待办列表|list|tasks)$/i.test(compact)) return true;
+  return /(?:还有|有什么|有啥|哪些|还剩|剩下)/.test(compact) && /(?:没完成|未完成|待办|任务|没做|要做)/.test(compact);
 }
 
 function parseEarlyOffset(text: string): EarlyReminderOffset | null {

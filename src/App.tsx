@@ -2580,14 +2580,15 @@ function getIlinkStatusText(
   connection: IlinkConnection | null,
   qrStatus: IlinkQrStatus["status"] | null
 ): string {
+  if (connection?.status === "connected") return connection.hasReplyContext ? "已连接，可提醒" : "已连接，待激活";
+  if (connection?.status === "error") return "连接异常";
+  if (connection?.status === "disabled") return "已断开";
   if (qrStatus === "pending") return "等待扫码";
   if (qrStatus === "scanned") return "已扫码，等待确认";
   if (qrStatus === "expired") return "二维码过期";
   if (qrStatus === "confirmed") return "已连接";
   if (!connection || connection.status === "not_connected") return "未连接";
-  if (connection.status === "disabled") return "已断开";
-  if (connection.status === "error") return "连接异常";
-  return connection.hasReplyContext ? "已连接，可提醒" : "已连接，待激活";
+  return "未连接";
 }
 
 function TaskListView({

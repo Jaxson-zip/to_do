@@ -21,12 +21,16 @@ describe("parseBotIntent", () => {
 
   it("parses today-list commands", () => {
     expect(parseBotIntent("今天有什么没完成", baseDate)).toEqual({ type: "listToday" });
+    expect(parseBotIntent("我今天还有什么没完成", baseDate)).toEqual({ type: "listToday" });
+    expect(parseBotIntent("今天还有哪些未完成任务", baseDate)).toEqual({ type: "listToday" });
+    expect(parseBotIntent("我今天还要做什么", baseDate)).toEqual({ type: "listToday" });
     expect(parseBotIntent("今日任务", baseDate)).toEqual({ type: "listToday" });
   });
 
   it("parses open-list commands", () => {
     expect(parseBotIntent("任务列表", baseDate)).toEqual({ type: "listOpen" });
     expect(parseBotIntent("未完成任务", baseDate)).toEqual({ type: "listOpen" });
+    expect(parseBotIntent("我还有什么没完成", baseDate)).toEqual({ type: "listOpen" });
     expect(parseBotIntent("tasks", baseDate)).toEqual({ type: "listOpen" });
   });
 
