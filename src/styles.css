@@ -1,25 +1,31 @@
 :root {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
-  color: #202124;
-  background: #ffffff;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+  color: #111827;
+  background: #fcfcfc;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --rail: #f3f3f3;
-  --sidebar: #fafafa;
+  -moz-osx-font-smoothing: grayscale;
+  --rail: #f9fafb;
+  --sidebar: #f3f4f6;
   --panel: #ffffff;
-  --hover: #f4f4f4;
-  --active: #eeeeee;
-  --line: #ededed;
-  --line-strong: #dfdfdf;
-  --text: #202124;
-  --muted: #8a8a8a;
-  --faint: #b7b7b7;
-  --blue: #4778e6;
-  --green: #20c86b;
-  --red: #e05454;
-  --gold: #f2a100;
+  --hover: #e5e7eb;
+  --active: #d1d5db;
+  --line: rgba(0, 0, 0, 0.06);
+  --line-strong: rgba(0, 0, 0, 0.12);
+  --text: #111827;
+  --muted: #6b7280;
+  --faint: #9ca3af;
+  --blue: #3b82f6;
+  --green: #10b981;
+  --red: #ef4444;
+  --gold: #f59e0b;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
 }
 
 * {
@@ -57,7 +63,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 [role="button"]:focus-visible {
-  outline: 2px solid rgba(71, 120, 230, 0.72);
+  outline: 2px solid var(--blue);
   outline-offset: 2px;
 }
 
@@ -83,7 +89,7 @@ svg {
   grid-template-columns: 52px 244px minmax(420px, 470px) minmax(360px, 1fr);
   width: 100%;
   height: 100%;
-  background: #fff;
+  background: var(--rail);
 }
 
 .app-frame.wide-mode {
@@ -197,10 +203,11 @@ svg {
   width: 100%;
   min-height: 36px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: #222;
+  color: var(--text);
   text-align: left;
+  transition: all 0.2s ease;
 }
 
 .nav-line {
@@ -234,12 +241,17 @@ svg {
 .nav-line:hover,
 .list-line:hover,
 .tag-line:hover,
-.filter-line:hover,
+.filter-line:hover {
+  background: var(--hover);
+  transform: translateX(2px);
+}
+
 .nav-line.active,
 .list-line.active,
 .tag-line.active,
 .filter-line.active {
   background: var(--active);
+  transform: translateX(2px);
 }
 
 .tag-line,
@@ -726,10 +738,11 @@ svg {
 .task-pane {
   min-width: 0;
   padding: 30px 22px 0;
-  background: #fff;
+  background: var(--panel);
   border-right: 1px solid var(--line);
   overflow: auto;
   scrollbar-width: none;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.02);
 }
 
 .task-header {
@@ -1899,14 +1912,20 @@ svg {
   grid-template-columns: 28px minmax(0, 1fr) 24px 24px;
   gap: 8px;
   align-items: center;
-  min-height: 40px;
-  border-bottom: 1px solid var(--line);
+  min-height: 48px;
+  padding: 0 8px;
+  margin: 4px 0;
+  border-radius: var(--radius-md);
+  border-bottom: 1px solid transparent;
   color: var(--text);
+  transition: all 0.2s ease;
 }
 
 .task-row:hover,
 .task-row.selected {
-  background: #fbfbfb;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 
 .task-row.done .task-copy h2 {
