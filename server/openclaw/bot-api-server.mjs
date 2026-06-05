@@ -2,6 +2,10 @@ import http from "node:http";
 import messageHandler from "./api-runtime/bot/message.js";
 import remindersHandler from "./api-runtime/bot/reminders.js";
 
+if (!process.env.BOT_WEBHOOK_SECRET && process.env.TODO_BOT_SECRET) {
+  process.env.BOT_WEBHOOK_SECRET = process.env.TODO_BOT_SECRET;
+}
+
 const host = process.env.TODO_LOCAL_API_HOST || "127.0.0.1";
 const configuredPort = Number(process.env.TODO_LOCAL_API_PORT || 8787);
 const port = Number.isFinite(configuredPort) ? configuredPort : 8787;

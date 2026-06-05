@@ -230,6 +230,10 @@ TODO_REMINDER_DRY_RUN=0
 command -v openclaw
 ```
 
+`TODO_BOT_SECRET` 是给 OpenClaw hook 用的服务器变量，值必须和 Vercel 的
+`BOT_WEBHOOK_SECRET` 一样。本地 Todo API 启动时会把它映射成 handler 需要的
+`BOT_WEBHOOK_SECRET`。
+
 如果 `command -v node` 不是 `/usr/bin/node`，后面安装 timer 前要改
 `server/openclaw/systemd/todo-openclaw-reminders.service` 里的 `ExecStart`。
 
