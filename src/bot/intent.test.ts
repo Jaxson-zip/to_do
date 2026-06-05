@@ -24,6 +24,7 @@ describe("parseBotIntent", () => {
     expect(parseBotIntent("我今天还有什么没完成", baseDate)).toEqual({ type: "listToday" });
     expect(parseBotIntent("今天还有哪些未完成任务", baseDate)).toEqual({ type: "listToday" });
     expect(parseBotIntent("我今天还要做什么", baseDate)).toEqual({ type: "listToday" });
+    expect(parseBotIntent("我今天还有什么事要做", baseDate)).toEqual({ type: "listToday" });
     expect(parseBotIntent("今日任务", baseDate)).toEqual({ type: "listToday" });
   });
 
@@ -63,15 +64,30 @@ describe("parseBotIntent", () => {
     });
   });
 
+  it("keeps simple acknowledgements silent", () => {
+    expect(parseBotIntent("好", baseDate)).toEqual({ type: "ack" });
+    expect(parseBotIntent("收到", baseDate)).toEqual({ type: "ack" });
+  });
+
   it("parses create commands through the task input parser", () => {
     const intent = parseBotIntent("明天上午10点交作业", baseDate);
 
     expect(intent.type).toBe("createTask");
     if (intent.type !== "createTask") throw new Error("expected createTask");
     expect(intent.title).toBe("交作业");
+    expect(intent.repeatRule).toBe("none");
     expect(intent.dueDate).toBe("2026-06-05");
     expect(new Date(intent.reminderAt ?? "").getTime()).toBe(new Date("2026-06-05T02:00:00.000Z").getTime());
     expect(new Date(intent.eventAt ?? "").getTime()).toBe(new Date("2026-06-05T02:00:00.000Z").getTime());
+  });
+
+  it("cleans assistant-style reminder prefixes from task titles", () => {
+    const intent = parseBotIntent("今晚10点提醒我健身打卡", baseDate);
+
+    expect(intent.type).toBe("createTask");
+    if (intent.type !== "createTask") throw new Error("expected createTask");
+    expect(intent.title).toBe("健身打卡");
+    expect(new Date(intent.reminderAt ?? "").getHours()).toBe(22);
   });
 
   it("parses create commands with an early reminder offset", () => {
@@ -83,5 +99,27 @@ describe("parseBotIntent", () => {
     expect(intent.dueDate).toBe("2026-06-05");
     expect(new Date(intent.reminderAt ?? "").getTime()).toBe(new Date("2026-06-05T01:30:00.000Z").getTime());
     expect(new Date(intent.eventAt ?? "").getTime()).toBe(new Date("2026-06-05T02:00:00.000Z").getTime());
+  });
+
+  it("splits several scheduled tasks from one message", () => {
+    const intent = parseBotIntent("周三下午3点客户demo、周五早9点的高铁提前1小时叫我、每周二晚8点私教课循环", baseDate);
+
+    expect(intent.type).toBe("createTasks");
+    if (intent.type !== "createTasks") throw new Error("expected createTasks");
+    expect(intent.items.map((item) => item.title)).toEqual(["客户demo", "高铁", "私教课"]);
+    expect(intent.items.map((item) => item.repeatRule)).toEqual(["none", "none", "weekly"]);
+    expect(new Date(intent.items[1].eventAt ?? "").getHours()).toBe(9);
+    expect(new Date(intent.items[1].reminderAt ?? "").getHours()).toBe(8);
+  });
+
+  it("parses lightweight record commands as notes", () => {
+    const intent = parseBotIntent("记录一下，今天体重 66.7", baseDate);
+
+    expect(intent).toEqual({
+      type: "createNote",
+      title: "体重 66.7kg",
+      body: "今天体重 66.7",
+      raw: "记录一下，今天体重 66.7",
+    });
   });
 });

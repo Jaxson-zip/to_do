@@ -101,10 +101,41 @@ export async function createTaskFromIntent(
     kind: "task",
     status: "open",
     priority: "normal",
-    repeat_rule: "none",
+    repeat_rule: intent.repeatRule,
     due_date: intent.dueDate,
     reminder_at: intent.reminderAt,
     tags: ["wechat"],
+    pinned: false,
+    archived: false,
+    deleted_at: null,
+    created_at: createdAt,
+    updated_at: createdAt,
+  };
+
+  const { data, error } = await supabase.from("memo_items").insert(payload).select("*").single();
+  if (error) throw error;
+  return memoItemFromRow(data as MemoItemRow);
+}
+
+export async function createNoteFromIntent(
+  supabase: SupabaseClient,
+  userId: string,
+  intent: Extract<BotIntent, { type: "createNote" }>
+): Promise<MemoItem> {
+  const createdAt = new Date().toISOString();
+  const payload: MemoItemRow = {
+    id: randomUUID(),
+    user_id: userId,
+    list_id: null,
+    title: intent.title,
+    body: intent.body,
+    kind: "note",
+    status: "open",
+    priority: "normal",
+    repeat_rule: "none",
+    due_date: null,
+    reminder_at: null,
+    tags: ["wechat", "record"],
     pinned: false,
     archived: false,
     deleted_at: null,

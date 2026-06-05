@@ -16,7 +16,6 @@ import {
 } from "./storage";
 import {
   checkIlinkQrCode,
-  createBotBindingCode,
   createIlinkQrCode,
   disconnectIlinkConnection,
   fetchIlinkConnection,
@@ -2328,9 +2327,6 @@ function SyncBox({
 }) {
   const status = getSyncStatus(session, syncing, pendingSync, syncError, lastSyncedAt);
   const showEmailConfirmHelp = isEmailConfirmIssue(authMessage) || isEmailConfirmIssue(syncError);
-  const [bindingCode, setBindingCode] = useState<{ code: string; instruction: string; expiresAt: string } | null>(null);
-  const [bindingCodeLoading, setBindingCodeLoading] = useState(false);
-  const [bindingCodeError, setBindingCodeError] = useState<string | null>(null);
   const [ilinkConnection, setIlinkConnection] = useState<IlinkConnection | null>(null);
   const [ilinkQr, setIlinkQr] = useState<IlinkQrCode | null>(null);
   const [ilinkQrStatus, setIlinkQrStatus] = useState<IlinkQrStatus["status"] | null>(null);
@@ -2411,19 +2407,6 @@ function SyncBox({
       setIlinkError(error instanceof Error ? error.message : "断开微信连接失败");
     } finally {
       setIlinkLoading(false);
-    }
-  }
-
-  async function generateBindingCode(): Promise<void> {
-    if (!session?.access_token) return;
-    setBindingCodeLoading(true);
-    setBindingCodeError(null);
-    try {
-      setBindingCode(await createBotBindingCode(session.access_token));
-    } catch (error) {
-      setBindingCodeError(error instanceof Error ? error.message : "生成绑定码失败");
-    } finally {
-      setBindingCodeLoading(false);
     }
   }
 
@@ -2537,23 +2520,6 @@ function SyncBox({
           {ilinkConnection?.lastPolledAt && <p>最近扫描 {formatDateTime(ilinkConnection.lastPolledAt)}</p>}
           {ilinkConnection?.lastError && <p className="error-text">{ilinkConnection.lastError}</p>}
           {ilinkError && <p className="error-text">{ilinkError}</p>}
-          <div className="wechat-binding-main wechat-binding-code-row">
-            <div className="wechat-binding-summary">
-              <span>绑定码备用</span>
-              <strong>{bindingCode?.code ?? "未生成"}</strong>
-            </div>
-            <button type="button" onClick={() => void generateBindingCode()} disabled={bindingCodeLoading}>
-              {bindingCodeLoading ? "生成中" : "生成绑定码"}
-            </button>
-          </div>
-          {bindingCode && (
-            <p>
-              {bindingCode.instruction}
-              <br />
-              {formatDateTime(bindingCode.expiresAt)} 前有效
-            </p>
-          )}
-          {bindingCodeError && <p className="error-text">{bindingCodeError}</p>}
         </div>
       )}
 

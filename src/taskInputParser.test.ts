@@ -29,6 +29,16 @@ describe("parseTaskInput", () => {
     expect(localHourMinute(parseTaskInput("晚上8点半聚餐", baseDate, { rollPastTime: false }).reminderAt)).toBe("20:30");
   });
 
+  it("parses short morning and evening words", () => {
+    const morning = parseTaskInput("周五早9点的高铁", baseDate, { rollPastTime: false });
+    const evening = parseTaskInput("周二晚8点私教课", baseDate, { rollPastTime: false });
+
+    expect(morning.title).toBe("的高铁");
+    expect(localHourMinute(morning.reminderAt)).toBe("09:00");
+    expect(evening.title).toBe("私教课");
+    expect(localHourMinute(evening.reminderAt)).toBe("20:00");
+  });
+
   it("treats a dangling dot after an hour as o'clock", () => {
     const plainHour = parseTaskInput("8.上班", baseDate, { rollPastTime: false });
     const eveningHour = parseTaskInput("晚上8.上班", baseDate, { rollPastTime: false });

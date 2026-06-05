@@ -2,7 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseBotIntent, type BotIntent } from "./intent.js";
 import {
   formatCompletedReply,
+  formatCreatedNoteReply,
   formatCreatedTaskReply,
+  formatCreatedTasksReply,
   formatDeletedReply,
   formatTaskListReply,
 } from "./responses.js";
@@ -10,6 +12,7 @@ import { findBestOpenTaskMatch, sortOpenTasksForBot } from "./taskMatcher.js";
 import { dateKeyInBotTimeZone } from "./time.js";
 import {
   type BotProvider,
+  createNoteFromIntent,
   createTaskFromIntent,
   fetchOpenTasks,
   markTaskDone,
@@ -39,10 +42,25 @@ export async function handleBoundIntent(
   options?: BotProcessorOptions
 ): Promise<string> {
   if (intent.type === "unknown") return "我还没看懂这句话。可以试试：今天任务、任务列表、完成 xxx、删除 xxx、明天10点提醒我xxx。";
+  if (intent.type === "ack") return "";
 
   if (intent.type === "createTask") {
     const item = await createTaskFromIntent(supabase, userId, intent);
-    return formatCreatedTaskReply(item);
+    return formatCreatedTaskReply(item, intent);
+  }
+
+  if (intent.type === "createTasks") {
+    const entries = [];
+    for (const taskIntent of intent.items) {
+      const item = await createTaskFromIntent(supabase, userId, taskIntent);
+      entries.push({ item, intent: taskIntent });
+    }
+    return formatCreatedTasksReply(entries);
+  }
+
+  if (intent.type === "createNote") {
+    const item = await createNoteFromIntent(supabase, userId, intent);
+    return formatCreatedNoteReply(item);
   }
 
   if (intent.type === "listToday") {
@@ -52,12 +70,14 @@ export async function handleBoundIntent(
       if (!item.reminderAt) return false;
       return dateKeyInBotTimeZone(new Date(item.reminderAt)) === today;
     });
-    return formatTaskListReply(tasks, "今天没有未完成任务。");
+    if (tasks.length === 0) return "今天没有未完成任务。";
+    return `你今天的待办还挂着这些：\n${formatTaskListReply(tasks, "今天没有未完成任务。")}\n后面的都还没到点，到时间我会提醒你。`;
   }
 
   if (intent.type === "listOpen") {
     const tasks = sortOpenTasksForBot(await fetchOpenTasks(supabase, userId, 20));
-    return formatTaskListReply(tasks, "现在没有未完成任务。");
+    if (tasks.length === 0) return "现在没有未完成任务。";
+    return `你现在的未完成任务：\n${formatTaskListReply(tasks, "现在没有未完成任务。")}`;
   }
 
   if (intent.type === "complete" || intent.type === "delete") {

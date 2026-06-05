@@ -41,7 +41,7 @@ function parseChineseQuickTime(
 ): ParsedTaskInput | null {
   const datePrefix =
     "(?:(今天|今晚|明天|明晚|后天|大后天|周[一二三四五六日天1-7]|星期[一二三四五六日天1-7]|礼拜[一二三四五六日天1-7])\\s*)?";
-  const timePrefix = "(凌晨|早上|上午|中午|下午|晚上|今晚|傍晚|夜里|明晚)?\\s*";
+  const timePrefix = "(凌晨|早|早上|上午|中午|下午|晚|晚上|今晚|傍晚|夜里|明晚)?\\s*";
   const timeConnector = "(?:上|的|在)?\\s*";
   const timeCore = "(\\d{1,2})(?:(?:[:：.．](\\d{1,2}))|点半|点|半|(?:[:：.．](?=\\D|$)))?";
   const match = raw.match(new RegExp(`^\\s*${datePrefix}${timePrefix}${timeConnector}${timeCore}`));
@@ -130,7 +130,7 @@ function weekdayToNumber(value: string): number {
 }
 
 function normalizeHour(hour: number, period: string): number {
-  if (["下午", "晚上", "今晚", "傍晚", "夜里", "明晚"].includes(period) && hour < 12) return hour + 12;
+  if (["下午", "晚", "晚上", "今晚", "傍晚", "夜里", "明晚"].includes(period) && hour < 12) return hour + 12;
   if (period === "中午" && hour < 11) return hour + 12;
   if (period === "凌晨" && hour === 12) return 0;
   return hour;

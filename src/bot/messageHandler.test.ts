@@ -5,6 +5,7 @@ const getSupabaseAdmin = vi.fn();
 const bindProviderUser = vi.fn();
 const fetchOpenTasks = vi.fn();
 const getBotBinding = vi.fn();
+const createNoteFromIntent = vi.fn();
 const createTaskFromIntent = vi.fn();
 const markTaskDone = vi.fn();
 const softDeleteTask = vi.fn();
@@ -16,6 +17,7 @@ vi.mock("../../api/_bot/supabaseAdmin.js", () => ({
 
 vi.mock("../../api/_bot/todoRepository.js", () => ({
   bindProviderUser,
+  createNoteFromIntent,
   createTaskFromIntent,
   fetchOpenTasks,
   getBotBinding,
@@ -64,6 +66,46 @@ describe("bot message handler", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual({ reply: "现在没有未完成任务。" });
     expect(fetchOpenTasks).toHaveBeenCalledWith({ client: "supabase" }, "todo-user", 20);
+  });
+
+  it("creates multiple scheduled tasks from one bound message", async () => {
+    getBotBinding.mockResolvedValue({ provider: "clawbot", provider_user_id: "wechat-user", user_id: "todo-user" });
+    createTaskFromIntent.mockImplementation(async (_supabase, _userId, intent) => ({
+      title: intent.title,
+      dueDate: intent.dueDate,
+      reminderAt: intent.reminderAt,
+      repeatRule: intent.repeatRule,
+    }));
+
+    const response = await invokeMessageHandler({
+      senderId: "wechat-user",
+      text: "周三下午3点客户demo、周五早9点的高铁提前1小时叫我、每周二晚8点私教课循环",
+    });
+
+    const body = response.body as { reply: string };
+    expect(response.statusCode).toBe(200);
+    expect(body.reply).toContain("收到，已经帮你排好");
+    expect(body.reply).toContain("客户demo");
+    expect(body.reply).toContain("高铁");
+    expect(body.reply).toContain("私教课");
+    expect(body.reply).toContain("每周");
+    expect(createTaskFromIntent).toHaveBeenCalledTimes(3);
+  });
+
+  it("creates notes from lightweight record commands", async () => {
+    getBotBinding.mockResolvedValue({ provider: "clawbot", provider_user_id: "wechat-user", user_id: "todo-user" });
+    createNoteFromIntent.mockResolvedValue({ title: "体重 66.7kg" });
+
+    const response = await invokeMessageHandler({ senderId: "wechat-user", text: "记录一下，今天体重 66.7" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({ reply: "好，已记下：体重 66.7kg。" });
+    expect(createNoteFromIntent).toHaveBeenCalledWith(
+      { client: "supabase" },
+      "todo-user",
+      expect.objectContaining({ type: "createNote", title: "体重 66.7kg" })
+    );
+    expect(createTaskFromIntent).not.toHaveBeenCalled();
   });
 });
 
