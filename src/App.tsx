@@ -1662,7 +1662,7 @@ export default function App() {
           />
         ) : (
           <UtilityPanel
-            panel={activePanel}
+            panel={["sync", "help", "reminders", "search"].includes(activePanel) ? ("none" as RailPanel) : activePanel}
             items={items}
             counts={counts}
             query={query}
