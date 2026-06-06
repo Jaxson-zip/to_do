@@ -1327,26 +1327,7 @@ export default function App() {
           </button>
         </div>
 
-        <SyncBox
-          session={session}
-          email={email}
-          setEmail={setEmail}
-          password={password}
-          setPassword={setPassword}
-          authMessage={authMessage}
-          syncError={syncError}
-          lastSyncedAt={lastSyncedAt}
-          syncing={syncing}
-          pendingSync={pendingSync}
-          localStats={localSyncStats}
-          cloudStats={cloudStats}
-          cloudStatsLoading={cloudStatsLoading}
-          submitLogin={submitPasswordLogin}
-          submitSignup={submitPasswordSignup}
-          runSync={runSync}
-          refreshCloudStats={refreshCloudStats}
-          refreshApp={refreshApp}
-        />
+
       </aside>
 
       <section className="task-pane">
