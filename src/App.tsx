@@ -36,6 +36,7 @@ import {
   type IlinkQrStatus,
 } from "./supabase";
 import { isDemoItemTitle } from "./demoItems";
+import { OpenClawBinding } from "./OpenClawBinding";
 import type { DraftItem, MemoItem, MemoList, Priority, RepeatRule, ViewFilter } from "./types";
 
 type SyncSnapshot = {
@@ -2476,14 +2477,18 @@ function SyncBox({
         </div>
       )}
 
+      {isSupabaseConfigured && session && <OpenClawBinding key={session.user.id} accessToken={session.access_token} />}
+
       {isSupabaseConfigured && session && (
-        <div className="wechat-binding">
+        <details className="wechat-binding">
+          <summary>独立扫码通道（可选）</summary>
+          <p>这是另一条连接方式。已使用 OpenClaw 的账号无需重复扫码。</p>
           <div className="wechat-binding-main">
             <div className="wechat-binding-summary">
-              <span>微信扫码</span>
+              <span>独立扫码状态</span>
               <strong>{ilinkStatusText}</strong>
             </div>
-            <button type="button" onClick={() => void startIlinkScan()} disabled={ilinkLoading}>
+            <button type="button" onClick={() => void startIlinkScan()} disabled={ilinkLoading || ilinkConnection?.status === "disabled"}>
               {ilinkLoading ? "处理中" : "扫码连接"}
             </button>
             {ilinkConnection?.connected && (
@@ -2501,7 +2506,7 @@ function SyncBox({
           {ilinkConnection?.lastPolledAt && <p>最近扫描 {formatDateTime(ilinkConnection.lastPolledAt)}</p>}
           {ilinkConnection?.lastError && <p className="error-text">{ilinkConnection.lastError}</p>}
           {ilinkError && <p className="error-text">{ilinkError}</p>}
-        </div>
+        </details>
       )}
 
       {authMessage && <p>{authMessage}</p>}
