@@ -2,9 +2,11 @@ import { randomInt } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAuthorizationBearer, requirePost, sendJson } from "../_bot/http.js";
 import { getSupabaseAdmin } from "../_bot/supabaseAdmin.js";
+import { getBotBindingByUserId } from "../_bot/todoRepository.js";
 
 export default async function handler(request: VercelRequest, response: VercelResponse): Promise<void> {
-  if (!requirePost(request, response)) return;
+  response.setHeader("Cache-Control", "no-store");
+  if (request.method !== "GET" && !requirePost(request, response)) return;
 
   const token = getAuthorizationBearer(request);
   if (!token) {
@@ -20,13 +22,17 @@ export default async function handler(request: VercelRequest, response: VercelRe
       return;
     }
 
-    await supabase.from("bot_binding_codes").delete().eq("user_id", data.user.id).is("used_at", null);
+    const binding = await getBotBindingByUserId(supabase, data.user.id);
+    if (request.method === "GET") { sendJson(response, 200, { bound: Boolean(binding) }); return; }
+    if (binding) { sendJson(response, 409, { error: "当前账号已绑定 OpenClaw，无需重复绑定。" }); return; }
+    const { error: deleteError } = await supabase.from("bot_binding_codes").delete().eq("user_id", data.user.id).is("used_at", null);
+    if (deleteError) throw deleteError;
     const { code, expiresAt } = await createBindingCode(supabase, data.user.id);
 
     sendJson(response, 200, {
       code,
       expiresAt,
-      instruction: `请在微信机器人里发送：绑定 ${code}`,
+      instruction: `td 绑定 ${code}`,
     });
   } catch (error) {
     console.error(error);

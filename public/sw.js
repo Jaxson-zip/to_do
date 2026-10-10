@@ -1,4 +1,4 @@
-const CACHE_NAME = "todo-memo-v5";
+const CACHE_NAME = "todo-memo-v6";
 const APP_SHELL = ["/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -19,6 +19,8 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
   const url = new URL(event.request.url);
+  // Account and bot status must never be replayed from a previous user's cache.
+  if (url.pathname.startsWith("/api/") || event.request.headers.has("authorization")) return;
   const isSameOrigin = url.origin === self.location.origin;
   const isBuildAsset = isSameOrigin && url.pathname.startsWith("/assets/");
   const isNavigation = event.request.mode === "navigate";
