@@ -1,5 +1,6 @@
 import * as chrono from "chrono-node";
-import { getToday, toDateKey } from "./dateUtils.js";
+import { botCalendarDate, instantFromBotCalendar } from "./time.js";
+const toDateKey = (date: Date) => date.toISOString().slice(0, 10);
 
 export type ParsedTaskInput = {
   title: string;
@@ -15,11 +16,12 @@ export function parseTaskInput(
 ): ParsedTaskInput {
   const raw = rawTitle.trim();
   if (!raw) return { title: "", dueDate: null, reminderAt: null };
+  baseDate = botCalendarDate(baseDate);
 
   const quick = parseChineseQuickTime(raw, baseDate, options.rollPastTime ?? true);
   if (quick) return quick;
 
-  const results = chrono.zh.hans.casual.parse(raw, baseDate);
+  const results = chrono.zh.hans.casual.parse(raw, { instant: baseDate, timezone: 0 });
   const first = results[0];
   if (!first) return { title: raw, dueDate: null, reminderAt: null };
   if (!isClearlyTemporalResult(first.text)) return { title: raw, dueDate: null, reminderAt: null };
@@ -31,7 +33,7 @@ export function parseTaskInput(
   return {
     title: fallbackTitle,
     dueDate: toDateKey(parsedDate),
-    reminderAt: parsedDate.toISOString(),
+    reminderAt: instantFromBotCalendar(parsedDate).toISOString(),
   };
 }
 
@@ -62,10 +64,10 @@ function parseChineseQuickTime(
 
   const date = dateFromWord(dateWord || periodWord || "", baseDate);
   const normalizedStartHour = normalizeHour(hour, periodWord || dateWord || "");
-  date.setHours(normalizedStartHour, minute, 0, 0);
+  date.setUTCHours(normalizedStartHour, minute, 0, 0);
 
-  if (rollPastTime && !dateWord && toDateKey(baseDate) === getToday() && date.getTime() < Date.now() - 60_000) {
-    date.setDate(date.getDate() + 1);
+  if (rollPastTime && !dateWord && date.getTime() < baseDate.getTime() - 60_000) {
+    date.setUTCDate(date.getUTCDate() + 1);
   }
 
   const range = parseTrailingTimeRange(raw.slice(match[0].length), date, periodWord || dateWord || "");
@@ -73,8 +75,8 @@ function parseChineseQuickTime(
   return {
     title: title || raw,
     dueDate: toDateKey(date),
-    reminderAt: date.toISOString(),
-    endAt: range.endAt?.toISOString() ?? null,
+    reminderAt: instantFromBotCalendar(date).toISOString(),
+    endAt: range.endAt ? instantFromBotCalendar(range.endAt).toISOString() : null,
   };
 }
 
@@ -97,8 +99,8 @@ function parseTrailingTimeRange(
   if (!Number.isInteger(minute) || minute < 0 || minute > 59) return { consumedLength: 0, endAt: null };
 
   const endAt = new Date(startDate);
-  endAt.setHours(normalizeHour(hour, endPeriod || inheritedPeriod), minute, 0, 0);
-  if (endAt.getTime() <= startDate.getTime()) endAt.setDate(endAt.getDate() + 1);
+  endAt.setUTCHours(normalizeHour(hour, endPeriod || inheritedPeriod), minute, 0, 0);
+  if (endAt.getTime() <= startDate.getTime()) endAt.setUTCDate(endAt.getUTCDate() + 1);
   return { consumedLength: matched.length, endAt };
 }
 
@@ -110,27 +112,27 @@ function isClearlyTemporalResult(text: string): boolean {
 
 function dateFromWord(word: string, baseDate: Date): Date {
   const date = new Date(baseDate);
-  date.setSeconds(0, 0);
+  date.setUTCSeconds(0, 0);
 
   if (word === "明天" || word === "明晚") {
-    date.setDate(date.getDate() + 1);
+    date.setUTCDate(date.getUTCDate() + 1);
     return date;
   }
   if (word === "后天") {
-    date.setDate(date.getDate() + 2);
+    date.setUTCDate(date.getUTCDate() + 2);
     return date;
   }
   if (word === "大后天") {
-    date.setDate(date.getDate() + 3);
+    date.setUTCDate(date.getUTCDate() + 3);
     return date;
   }
 
   const weekMatch = word.match(/(?:周|星期|礼拜)([一二三四五六日天1-7])/);
   if (weekMatch) {
     const target = weekdayToNumber(weekMatch[1]);
-    const current = date.getDay() === 0 ? 7 : date.getDay();
+    const current = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
     const delta = (target - current + 7) % 7 || 7;
-    date.setDate(date.getDate() + delta);
+    date.setUTCDate(date.getUTCDate() + delta);
   }
 
   return date;
