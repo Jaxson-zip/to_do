@@ -1,5 +1,6 @@
 import type { MemoItem } from "./types";
 import type { BotIntent } from "./intent";
+import { getBotTimeZone } from './time.js';
 
 type CreateTaskIntent = Extract<BotIntent, { type: "createTask" }>;
 
@@ -42,6 +43,7 @@ export function formatDeletedReply(item: Pick<MemoItem, "title">): string {
 
 export function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: getBotTimeZone(),
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -67,6 +69,7 @@ function formatDateRange(start: string | null | undefined, end: string | null | 
   if (!end) return formatDateTime(start);
   const startText = formatDateTime(start);
   const endText = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: getBotTimeZone(),
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(end));
